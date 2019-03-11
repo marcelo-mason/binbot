@@ -1,12 +1,28 @@
 import db from './db'
+import binance from './binance'
+import forever from 'forever-monitor'
 
 class Commands {
-  snipeBuy(coin, currency, price, amount) {
-    db.addSnipeBuy(coin.toUpperCase(), currency.toUpperCase(), price, amount)
+  async start() {
+    const ok = await binance.sync()
+    if (!ok) {
+      return
+    }
+
+    new forever.Monitor('./src/loaders/monitor.js', {
+      max: 10000
+    })
+      .on('restart', () => {
+        console.log('* binbot has restarted')
+      })
+      .start()
   }
-  snipeSell(coin, currency, price, amount) {
-    db.addSnipeSell(coin.toUpperCase(), currency.toUpperCase(), price, amount)
+
+  sell(pair, price, quantity) {
+    db.addSell(pair.toUpperCase(), price, quantity)
   }
+
+  list() {}
 }
 
 export default new Commands()

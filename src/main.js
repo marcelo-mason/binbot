@@ -1,7 +1,6 @@
 import { config } from 'dotenv'
 import program from 'commander'
 import commands from './commands'
-import forever from 'forever-monitor'
 
 const envFile = process.env.NODE_ENV ? `.env.${process.env.NODE_ENV}` : '.env'
 config({ path: envFile })
@@ -14,32 +13,25 @@ process.on('unhandledRejection', (reason, p) => {
 
 program.description('BinBot')
 
-program.command('run').action(() => {
-  var child = new forever.Monitor('./src/monitor.js', {
-    max: 1000
-  })
-
-  child
-    .on('restart', () => {
-      console.log('binbot has restarted')
-    })
-    .on('exit', () => {
-      console.log('binbot has exited after 100 restarts')
-    })
-
-  child.start()
-})
-
 program
-  .command('snipebuy <coin> <currency> <price> <amount>')
-  .action((coin, currency, price, amount) => {
-    commands.snipeBuy(coin, currency, price, amount)
+  .command('sell <pair> <triggerPrice> <sellPrice> <percentage>')
+  .description('Sets limit sell when target price is reached')
+  .action((pair, triggerPrice, sellPrice, percentage) => {
+    commands.sell(pair, triggerPrice, sellPrice, percentage)
   })
 
 program
-  .command('snipesell <coin> <currency> <price> <amount>')
-  .action((coin, currency, price, amount) => {
-    commands.snipeSell(coin, currency, price, amount)
+  .command('list')
+  .description('List pending actions')
+  .action(() => {
+    commands.list()
+  })
+
+program
+  .command('start')
+  .description('Starts monitoring prices')
+  .action(() => {
+    commands.start()
   })
 
 program.on('--help', () => {
@@ -47,6 +39,8 @@ program.on('--help', () => {
   console.log('Examples:')
   console.log('  binbot snipebuy BNB USDT 14.5 250')
   console.log('  binbot snipesell BNB USDT 22 250')
+  console.log('  binbot list')
+  console.log('  binbot start')
 })
 
 program.parse(process.argv)

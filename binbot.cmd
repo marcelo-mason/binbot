@@ -1,2 +1,2 @@
 @echo off
-node src/binbot.js %1 %2 %3 %4 %5 %6 %7 %8 %9
+node src/loaders/binbot.js %1 %2 %3 %4 %5 %6 %7 %8 %9

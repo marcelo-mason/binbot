@@ -7,20 +7,13 @@ const adapter = new FileSync('db.json')
 class Db {
   constructor() {
     this.db = low(adapter)
-    this.db.defaults({ snipeBuys: [], snipeSells: [] }).write()
+    this.db.defaults({ sells: [] }).write()
   }
 
-  addSnipeBuy(coin, currency, price, amount) {
+  addSell(pair, currency, price, quantity) {
     this.db
-      .get('snipeBuys')
-      .push({ id: shortid.generate(), coin, currency, price, amount })
-      .write()
-  }
-
-  addSnipeSell(coin, currency, price, amount) {
-    this.db
-      .get('snipeSells')
-      .push({ id: shortid.generate(), coin, currency, price, amount })
+      .get('sells')
+      .push({ id: shortid.generate(), pair, price, quantity })
       .write()
   }
 }

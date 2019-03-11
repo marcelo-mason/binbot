@@ -1,2 +1,2 @@
 #!/bin/sh
-node src/binbot.js "$@" 
+node src/loaders/binbot.js "$@" 

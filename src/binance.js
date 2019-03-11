@@ -1,4 +1,5 @@
 import { BinanceWS, BinanceRest } from 'binance'
+import moment from 'moment'
 
 class Binance {
   constructor() {
@@ -14,10 +15,22 @@ class Binance {
     this.ws = new BinanceWS(true)
   }
 
-  test() {
-    this.ws.onDepthUpdate('BNBBTC', data => {
-      console.log(data)
-    })
+  async sync() {
+    const time = await this.rest.time()
+    console.log(time)
+    if (time) {
+      const serverTime = Math.round(time.serverTime / 1000)
+      const machineTime = moment().unix()
+      const diffSecs = Math.floor(Math.abs(serverTime - machineTime) / 1000)
+      if (diffSecs > 0) {
+        console.log(`* Your machine time is off by ${diffSecs} seconds.  Please fix.`)
+        return false
+      }
+    } else {
+      console.log(`* Could not connect to the binance api`)
+      return false
+    }
+    return true
   }
 }
 
