@@ -1,9 +1,5 @@
-import { config } from 'dotenv'
 import program from 'commander'
 import commands from './commands'
-
-const envFile = process.env.NODE_ENV ? `.env.${process.env.NODE_ENV}` : '.env'
-config({ path: envFile })
 
 process.on('unhandledRejection', (reason, p) => {
   console.log(p)
@@ -11,13 +7,22 @@ process.on('unhandledRejection', (reason, p) => {
 
 // commands
 
-program.description('BinBot')
+program
+  .description('BinBot')
+  .option('-d, --defer-percentage', 'Calculate the percentage at the time the order is set')
 
 program
-  .command('sell <pair> <triggerPrice> <sellPrice> <percentage>')
+  .command('sell <base> <quote> <triggerPrice> <sellPrice> <percentage>')
   .description('Sets limit sell when target price is reached')
-  .action((pair, triggerPrice, sellPrice, percentage) => {
-    commands.sell(pair, triggerPrice, sellPrice, percentage)
+  .action((base, quote, triggerPrice, sellPrice, percentage) => {
+    commands.sell(
+      base.toUpperCase(),
+      quote.toUpperCase(),
+      triggerPrice,
+      sellPrice,
+      percentage.replace('%', ''),
+      program.deferPercentage
+    )
   })
 
 program
@@ -28,7 +33,7 @@ program
   })
 
 program
-  .command('start')
+  .command('run')
   .description('Starts monitoring prices')
   .action(() => {
     commands.start()
@@ -37,10 +42,9 @@ program
 program.on('--help', () => {
   console.log('')
   console.log('Examples:')
-  console.log('  binbot snipebuy BNB USDT 14.5 250')
-  console.log('  binbot snipesell BNB USDT 22 250')
+  console.log('  binbot sell KNC BTC 0.000070 0.000071 50%')
   console.log('  binbot list')
-  console.log('  binbot start')
+  console.log('  binbot run')
 })
 
 program.parse(process.argv)

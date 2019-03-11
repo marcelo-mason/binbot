@@ -10,10 +10,18 @@ class Db {
     this.db.defaults({ sells: [] }).write()
   }
 
-  addSell(pair, currency, price, quantity) {
+  addSell(base, quote, triggerPrice, triggerDirection, sellPrice, percentage) {
     this.db
       .get('sells')
-      .push({ id: shortid.generate(), pair, price, quantity })
+      .push({
+        id: shortid.generate(),
+        base,
+        quote,
+        triggerPrice,
+        triggerDirection,
+        sellPrice,
+        percentage
+      })
       .write()
   }
 }
