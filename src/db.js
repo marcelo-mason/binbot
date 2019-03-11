@@ -10,7 +10,16 @@ class Db {
     this.db.defaults({ sells: [] }).write()
   }
 
-  addSell(base, quote, triggerPrice, triggerDirection, sellPrice, percentage) {
+  addSell(
+    base,
+    quote,
+    triggerPrice,
+    triggerDirection,
+    sellPrice,
+    sellAmount,
+    percentage,
+    deferPercentage
+  ) {
     this.db
       .get('sells')
       .push({
@@ -20,7 +29,9 @@ class Db {
         triggerPrice,
         triggerDirection,
         sellPrice,
-        percentage
+        sellAmount,
+        percentage,
+        deferPercentage
       })
       .write()
   }
