@@ -1,39 +1,42 @@
 import low from 'lowdb'
-import shortid from 'shortid'
+import idable from 'idable'
 import FileSync from 'lowdb/adapters/FileSync'
+import _ from 'lodash'
 
 const adapter = new FileSync('db.json')
 
 class Db {
   constructor() {
     this.db = low(adapter)
-    this.db.defaults({ sells: [] }).write()
+    this.db.defaults({ orders: [] }).write()
   }
 
-  addSell(
-    base,
-    quote,
-    triggerPrice,
-    triggerDirection,
-    sellPrice,
-    sellAmount,
-    percentage,
-    deferPercentage
-  ) {
+  addOrder(base, quote, side, triggerPrice, direction, price, quantity, percentage, opts) {
     this.db
-      .get('sells')
+      .get('orders')
       .push({
-        id: shortid.generate(),
+        id: idable(8, false),
         base,
         quote,
+        pair: `${base}${quote}`,
+        side,
         triggerPrice,
-        triggerDirection,
-        sellPrice,
-        sellAmount,
+        direction,
+        price,
+        quantity,
         percentage,
-        deferPercentage
+        opts
       })
       .write()
+  }
+
+  getOrdersGroupedByPair() {
+    return this.db
+      .get('orders')
+      .groupBy('pair')
+      .toPairs()
+      .map(pair => _.zipObject(['pair', 'orders'], pair))
+      .value()
   }
 }
 
