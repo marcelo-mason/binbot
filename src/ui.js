@@ -1,9 +1,8 @@
 import blessed from 'blessed'
-import BigNumber from 'bignumber.js'
 
 class UI {
   constructor() {
-    this.listData = [[]]
+    this.isInit = false
     this.index = {
       id: 0,
       pair: 1,
@@ -11,7 +10,7 @@ class UI {
       price: 3,
       quantity: 4,
       trigger: 5,
-      current: 6,
+      currentPrice: 6,
       distance: 7
     }
     this.titles = [
@@ -25,12 +24,18 @@ class UI {
         order.price,
         order.quantity === 'tbd' ? `${order.percentage}%` : order.quantity,
         order.triggerPrice,
-        ''
+        order.state.currentPrice,
+        order.state.distance
       ]
     }
   }
 
-  render() {
+  init() {
+    if (this.isInit) {
+      return
+    }
+    this.isInit = true
+
     this.screen = blessed.screen({
       smartCSR: true,
       autoPadding: true,
@@ -45,7 +50,7 @@ class UI {
       height: '100%'
     })
 
-    this.table = blessed.table({
+    this.table = blessed.listtable({
       parent: this.layout,
       top: '0',
       width: '100%',
@@ -53,6 +58,7 @@ class UI {
       border: 'line',
       align: 'left',
       tags: true,
+      noCellBorders: true,
       style: {
         border: {
           fg: 'white'
@@ -66,45 +72,24 @@ class UI {
 
     this.table.setData(this.listData)
 
-    this.screen.key('escape', function() {
+    this.screen.key('escape', () => {
+      return this.screen.destroy()
+    })
+    this.screen.key('C-c', () => {
       return this.screen.destroy()
     })
 
     this.screen.render()
   }
 
-  updateTable() {
-    this.table.setData(this.listData)
-    this.screen.render()
-    this.screen.cursorReset()
-  }
-
-  populate(grouped) {
-    this.render()
-
-    this.listData = grouped.reduce((acc, { orders }) => {
+  update(grouped) {
+    this.init()
+    const data = grouped.reduce((acc, { orders }) => {
       const arrs = orders.map(o => this.formatOrder(o))
       return acc.concat(arrs)
     }, this.titles)
-
-    this.updateTable()
-  }
-
-  updatePrices(ticker) {
-    this.listData.forEach(row => {
-      if (row[this.index.pair] === ticker.symbol) {
-        row[this.index.current] = ticker.currentClose
-        const distance = new BigNumber(row[this.index.trigger])
-          .minus(ticker.currentClose)
-          .absoluteValue()
-          .dividedBy(row[this.index.trigger])
-          .multipliedBy(100)
-          .toFixed(2)
-          .toString()
-        row[this.index.distance] = `${distance}%`
-      }
-    })
-    this.updateTable()
+    this.table.setData(data)
+    this.screen.render()
   }
 }
 

@@ -91,6 +91,11 @@ class Commands {
 
     // add order to database
 
+    const state = {
+      distance: 0,
+      currentPrice: 0
+    }
+
     if (res.correct) {
       db.addOrder(
         base,
@@ -101,6 +106,7 @@ class Commands {
         price,
         opts.deferPercentage ? 'tbd' : quantity,
         percentage,
+        state,
         opts
       )
     }

@@ -12,12 +12,13 @@ class Monitor {
 
   async listen() {
     const grouped = await db.getOrdersGroupedByPair()
-    ui.populate(grouped)
 
     await async.each(grouped, async ({ pair, orders }) => {
       await binance.ws.onTicker(pair, async ticker => {
-        ui.updatePrices(ticker)
-        await async.each(orders, order => {
+        db.updateState(ticker)
+        ui.update(grouped)
+
+        async.each(orders, order => {
           const above = order.direction === '>' && ticker.currentClose >= order.triggerPrice
           const below = order.direction === '<' && ticker.currentClose <= order.triggerPrice
           if (above || below) {
@@ -55,6 +56,8 @@ class Monitor {
       order.price,
       order.opts
     )
+
+    ui.setStatus(order.id, 'Active')
   }
 }
 
