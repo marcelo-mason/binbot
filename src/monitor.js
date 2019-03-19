@@ -25,7 +25,10 @@ class Monitor {
             if (order.side === 'SELL') {
               this.triggerSell(order)
               log.sellTriggered(order, ticker)
-            } else {
+            }
+            if (order.side === 'BUY') {
+              this.triggerBuy(order)
+              log.buyTriggered(order, ticker)
             }
           }
         })
@@ -56,8 +59,21 @@ class Monitor {
       order.price,
       order.opts
     )
+  }
 
-    ui.setStatus(order.id, 'Active')
+  async triggerBuy(order) {
+    if (order.opts.cancelStops) {
+      await binance.cancelStops(order.pair)
+    }
+
+    await binance.createOrder(
+      order.pair,
+      order.side,
+      order.id,
+      order.quantity,
+      order.price,
+      order.opts
+    )
   }
 }
 

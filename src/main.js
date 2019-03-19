@@ -35,23 +35,16 @@ program
   })
 
 program
-  .command('buy <base> <quote> <triggerPrice> <price> <percentage>')
+  .command('buy <base> <quote> <triggerPrice> <price> <quantity>')
   .description('Sets limit buy when target price is reached')
-  .action((base, quote, triggerPrice, price, percentage) => {
+  .action((base, quote, triggerPrice, price, quantity) => {
     const opts = {
       deferPercentage: program.deferPercentage || false,
       cancelStops: program.cancelStops || false,
       icebergOrder: program.icebergOrder || false,
       makerOnly: program.makerOnly || false
     }
-    commands.buy(
-      base.toUpperCase(),
-      quote.toUpperCase(),
-      triggerPrice,
-      price,
-      percentage.replace('%', ''),
-      opts
-    )
+    commands.buy(base.toUpperCase(), quote.toUpperCase(), triggerPrice, price, quantity, opts)
   })
 
 program

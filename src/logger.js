@@ -36,6 +36,15 @@ export const log = {
     )
     this.verbose(ticker)
   },
+  buyTriggered: (order, ticker) => {
+    this.info(
+      'order triggered',
+      `p:${order.base}${order.quote} t:${order.direction}${order.triggerPrice} p:${order.price} q:${
+        order.quantity
+      }%`
+    )
+    this.verbose(ticker)
+  },
   deferredCalculation: (order, freeBalance) => {
     this.info(
       `Calculating deferred percentage: ${order.percentage}% of ${freeBalance} ${order.base} = ${
