@@ -5,7 +5,6 @@ import async from 'awaitable-async'
 import asTable from 'as-table'
 import idable from 'idable'
 import chalk from 'chalk'
-import comma from 'comma-number'
 
 import db from '../db'
 import binance from '../binance'
@@ -26,9 +25,9 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
   }
 
   // fix price precision
-  currentPrice = new BigNumber(currentPrice).toFixed(ei.precision.price).toString()
-  min = new BigNumber(min).toFixed(ei.precision.price).toString()
-  max = new BigNumber(max).toFixed(ei.precision.price).toString()
+  currentPrice = new BigNumber(currentPrice).toFixedDown(ei.precision.price).toString()
+  min = new BigNumber(min).toFixedDown(ei.precision.price).toString()
+  max = new BigNumber(max).toFixedDown(ei.precision.price).toString()
 
   // check for iceberg limitation
   if (!ei.icebergAllowed && opts.iceberg) {
@@ -54,7 +53,7 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
 
   const spreadWidth = new BigNumber(max)
     .minus(min)
-    .toFixed(ei.precision.price)
+    .toFixedDown(ei.precision.price)
     .toString()
 
   const spreadWidthPercent = new BigNumber(spreadWidth)
@@ -72,21 +71,21 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
       const distance = new BigNumber(spreadDistance).multipliedBy(n).toString()
       return new BigNumber(min)
         .plus(distance)
-        .toFixed(ei.precision.price)
+        .toFixedDown(ei.precision.price)
         .toString()
     })
     .reverse()
 
   // calculate quantities spreads
 
-  const portion = new BigNumber(totalQuantity).dividedBy(orders).toString()
+  const portion = new BigNumber(totalQuantity).dividedBy(orders)
   const unit = new BigNumber(portion).dividedBy(orders + 1).toString()
   const multiples = _.range(2, orders * 2 + 2, 2)
   let quantities = multiples.map(r =>
     parseFloat(
       new BigNumber(r)
         .multipliedBy(unit)
-        .toFixed(ei.precision.qty)
+        .toFixedDown(ei.precision.quantity)
         .toString()
     )
   )
@@ -94,7 +93,7 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
     quantities = quantities.reverse()
   }
   if (!opts.ascending && !opts.descending) {
-    quantities = Array(orders).fill(portion)
+    quantities = Array(orders).fill(portion.toFixedDown(ei.precision.quantity).toString())
   }
 
   const payload = _.zip(_.range(1, orders + 1), prices, quantities)
@@ -113,7 +112,7 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
     o.push(
       new BigNumber(o[index.price])
         .multipliedBy(o[index.quantity])
-        .toFixed(ei.precision.quote)
+        .toFixedDown(ei.precision.quote)
         .toString()
     )
   })
@@ -126,7 +125,7 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
     [`Max buy price`, `${max} ${quote}`],
     ['Spread width', `${spreadWidth} ${quote} (${spreadWidthPercent}%)`],
     ['Buy Distance', `${buyDistance}% from current`],
-    [`Total to buy`, comma(totalQuantity)],
+    [`Total to buy`, totalQuantity],
     [
       `Options`,
       [
@@ -151,8 +150,8 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
     const quantity = o[index.quantity]
     let error = ''
 
-    if (!ei.validate.qty(quantity)) {
-      error = `Quantity out of range (${ei.qty.min}-${ei.qty.max})`
+    if (!ei.validate.quantity(quantity)) {
+      error = `Quantity out of range (${ei.quantity.min}-${ei.quantity.max})`
     }
     if (!ei.validate.price(price)) {
       error = `Price out of range (${ei.price.min}-${ei.price.max})`
@@ -163,7 +162,7 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
 
     // calculate iceberg
     const iceburgQty = opts.iceberg
-      ? new BigNumber(quantity).multipliedBy(0.95).toFixed(ei.precision.qty)
+      ? new BigNumber(quantity).multipliedBy(0.95).toFixedDown(ei.precision.quantity)
       : 0
 
     // test order
@@ -180,7 +179,7 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
     if (res.success) {
       o[index.validation] = `${chalk.bold.green('good ✔')}`
     } else {
-      o[index.validation] = `${chalk.bold.red('failed ✖')} ${chalk.red(error)}`
+      o[index.validation] = `${chalk.bold.red('failed ✖')} ${chalk.red(error || res.msg)}`
     }
   })
 
@@ -209,7 +208,7 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
     await async.eachSeries(payload, async o => {
       // calculate iceberg
       const iceburgQty = opts.iceberg
-        ? new BigNumber(o[index.quantity]).multipliedBy(0.95).toFixed(ei.precision.qty)
+        ? new BigNumber(o[index.quantity]).multipliedBy(0.95).toFixedDown(ei.precision.quantity)
         : 0
 
       // create order

@@ -124,10 +124,12 @@ class Binance {
       symbol: pair,
       side,
       type: opts.makerOnly ? 'LIMIT_MAKER' : 'LIMIT',
-      timeInForce: 'GTC',
       quantity,
       price,
       icebergQty: icebergQty || 0
+    }
+    if (!opts.makerOnly) {
+      order.timeInForce = 'GTC'
     }
     try {
       const res = await this.rest.newOrder(order)
@@ -146,10 +148,12 @@ class Binance {
       symbol: pair,
       side,
       type: opts.makerOnly ? 'LIMIT_MAKER' : 'LIMIT',
-      timeInForce: 'GTC',
       quantity,
       price,
       icebergQty: icebergQty || 0
+    }
+    if (!opts.makerOnly) {
+      order.timeInForce = 'GTC'
     }
     try {
       await this.rest.testOrder(order)
@@ -220,13 +224,13 @@ class Binance {
       precision: {
         base: found.baseAssetPrecision,
         quote: found.quotePrecision,
-        qty: toPrecision(lotSize.stepSize),
+        quantity: toPrecision(lotSize.stepSize),
         price: toPrecision(priceFilter.tickSize)
       },
       notional: {
         min: notional.minNotional
       },
-      qty: {
+      quantity: {
         min: new BigNumber(lotSize.minQty).toFixed(toPrecision(lotSize.stepSize)).toString(),
         max: new BigNumber(lotSize.maxQty).toFixed(toPrecision(lotSize.stepSize)).toString(),
         step: lotSize.stepSize
@@ -241,7 +245,7 @@ class Binance {
         step: priceFilter.tickSize
       },
       validate: {
-        qty: quantity => {
+        quantity: quantity => {
           return validator(quantity, lotSize.minQty, lotSize.maxQty, lotSize.stepSize)
         },
         value: (price, quantity) => {

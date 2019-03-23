@@ -22,7 +22,6 @@
     "blessed": "^0.1.81",
     "case": "^1.6.1",
     "chalk": "^2.4.2",
-    "comma-number": "^2.0.0",
     "commander": "^2.19.0",
     "controlled-schedule": "^1.2.0",
     "dotenv": "^6.2.0",

@@ -62,10 +62,8 @@ export default async function triggerSell(base, quote, trigger, price, percentag
     [`Current price`, `${currentPrice} ${quote}`],
     [`Trigger price`, `${trigger} ${quote}`],
     [`Sell price`, `${price} ${quote}`],
-    ['', ''],
     [`Trigger distance`, `${triggerDistance}% from current`],
     [`Sell distance`, `${sellDistance}% from trigger`],
-    ['', ''],
     [`Free ${base} balance`, freeBalance],
     [
       opts.deferPercentage ? `Percent to sell` : `Quantity to sell`,

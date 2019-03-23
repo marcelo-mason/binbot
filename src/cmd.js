@@ -3,6 +3,9 @@ import program from 'commander'
 import commands from './commands'
 import { log } from './logger'
 import ui from './ui'
+import util from './util'
+
+util.init()
 
 process.on('unhandledRejection', log.error)
 
@@ -65,9 +68,9 @@ program
   })
 
 program
-  .command('spread-sell <base> <quote> <min> <max> <quantity> [orders]')
+  .command('spread-sell <base> <quote> <min> <max> <percentage> [orders]')
   .description('Sets limit-sells across a price range')
-  .action((base, quote, min, max, quantity, orders) => {
+  .action((base, quote, min, max, percentage, orders) => {
     const opts = {
       cancelStops: program.cancelStops || false,
       iceberg: program.iceberg || false,
@@ -75,7 +78,15 @@ program
       ascending: program.ascending || false,
       descending: program.descending || false
     }
-    commands.spreadSell(base.toUpperCase(), quote.toUpperCase(), min, max, quantity, orders, opts)
+    commands.spreadSell(
+      base.toUpperCase(),
+      quote.toUpperCase(),
+      min,
+      max,
+      percentage.replace('%', ''),
+      orders,
+      opts
+    )
   })
 
 program
