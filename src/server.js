@@ -15,6 +15,19 @@ program
   .option('-m, --maker-only', 'Order rejected if it would immediately match as a taker')
 
 program
+  .command('buy <base> <quote> <triggerPrice> <price> <quantity>')
+  .description('Sets limit buy when target price is reached')
+  .action((base, quote, triggerPrice, price, quantity) => {
+    const opts = {
+      deferPercentage: program.deferPercentage || false,
+      cancelStops: program.cancelStops || false,
+      icebergOrder: program.icebergOrder || false,
+      makerOnly: program.makerOnly || false
+    }
+    commands.buy(base.toUpperCase(), quote.toUpperCase(), triggerPrice, price, quantity, opts)
+  })
+
+program
   .command('sell <base> <quote> <triggerPrice> <price> <percentage>')
   .description('Sets limit sell when target price is reached')
   .action((base, quote, triggerPrice, price, percentage) => {
@@ -35,16 +48,16 @@ program
   })
 
 program
-  .command('buy <base> <quote> <triggerPrice> <price> <quantity>')
-  .description('Sets limit buy when target price is reached')
-  .action((base, quote, triggerPrice, price, quantity) => {
+  .command('snipe <base> <quote> <minPrice> <maxPrice> <budget>')
+  .description('Buys coin upon listing setting limit orders within a range')
+  .action((base, quote, minPrice, maxPrice, budget) => {
     const opts = {
       deferPercentage: program.deferPercentage || false,
       cancelStops: program.cancelStops || false,
       icebergOrder: program.icebergOrder || false,
       makerOnly: program.makerOnly || false
     }
-    commands.buy(base.toUpperCase(), quote.toUpperCase(), triggerPrice, price, quantity, opts)
+    commands.snipe(base.toUpperCase(), quote.toUpperCase(), minPrice, maxPrice, budget, opts)
   })
 
 program
@@ -72,6 +85,8 @@ program.on('--help', () => {
   console.log('')
   console.log('Examples:')
   console.log('  binbot sell KNC BTC 0.000070 0.000071 50% -ci')
+  console.log('  binbot buy KNC BTC 0.000041 0.000040 100% -i')
+  console.log('  binbot snipe CELR BTC 0.00000165 0.00000 100% -i')
   console.log('  binbot list')
   console.log('  binbot run')
 })

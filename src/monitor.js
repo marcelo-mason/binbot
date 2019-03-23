@@ -1,5 +1,6 @@
 import db from './db'
 import binance from './binance'
+import execute from 'controlled-schedule'
 import async from 'awaitable-async'
 import BigNumber from 'bignumber.js'
 import { log } from './logger'
@@ -34,6 +35,18 @@ class Monitor {
         })
       })
     })
+
+    const snipe = db.getSnipe()
+    if (snipe) {
+      /*
+      execute(this.checkDealChanges.bind(this))
+        .every('1s')
+        .start() */
+
+      await binance.ws.onTicker(snipe.pair, async ticker => {
+        console.log(ticker)
+      })
+    }
   }
 
   async triggerSell(order) {

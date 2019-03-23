@@ -72,10 +72,7 @@ class UI {
 
     this.table.setData(this.listData)
 
-    this.screen.key('escape', () => {
-      return this.screen.destroy()
-    })
-    this.screen.key('C-c', () => {
+    this.screen.key(['escape', 'q', 'C-c'], () => {
       return this.screen.destroy()
     })
 

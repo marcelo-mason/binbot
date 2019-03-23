@@ -11,4 +11,4 @@ require('@babel/register')({
   ]
 })
 
-module.exports = require('../main.js')
+module.exports = require('../server.js')

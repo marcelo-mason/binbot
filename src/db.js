@@ -11,7 +11,8 @@ class Db {
     this.db = low(adapter)
     this.db
       .defaults({
-        orders: []
+        orders: [],
+        snipe: {}
       })
       .write()
   }
@@ -36,12 +37,6 @@ class Db {
       .write()
   }
 
-  getOrder(id) {
-    return this.db.get('orders').find({
-      id
-    })
-  }
-
   removeOrder(id) {
     this.db
       .get('orders')
@@ -60,7 +55,11 @@ class Db {
       .value()
 
     orders.forEach(o => {
-      this.getOrder(o.id)
+      this.db
+        .get('orders')
+        .find({
+          id: o.id
+        })
         .assign({
           state: {
             currentPrice: ticker.currentClose,
@@ -85,6 +84,35 @@ class Db {
       .toPairs()
       .map(pair => _.zipObject(['pair', 'orders'], pair))
       .value()
+  }
+
+  setSnipe(base, quote, minPrice, maxPrice, budget, state, opts) {
+    this.db
+      .set('snipe', {
+        base,
+        quote,
+        pair: `${base}${quote}`,
+        minPrice,
+        maxPrice,
+        budget,
+        opts,
+        state
+      })
+      .write()
+  }
+
+  getSnipe() {
+    const snipe = this.db.get('snipe').value()
+
+    if (_.isEmpty(snipe)) {
+      return null
+    }
+
+    return snipe
+  }
+
+  clearSnipe() {
+    this.db.set('snipe', {}).write()
   }
 }
 
