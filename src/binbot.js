@@ -11,4 +11,4 @@ require('@babel/register')({
   ]
 })
 
-module.exports = require('../server.js')
+module.exports = require('./cmd.js')

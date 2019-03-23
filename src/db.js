@@ -12,12 +12,12 @@ class Db {
     this.db
       .defaults({
         orders: [],
-        snipe: {}
+        history: []
       })
       .write()
   }
 
-  addOrder(base, quote, side, triggerPrice, direction, price, quantity, percentage, state, opts) {
+  addOrder(base, quote, side, trigger, direction, price, quantity, percentage, state, opts) {
     this.db
       .get('orders')
       .push({
@@ -26,7 +26,7 @@ class Db {
         quote,
         pair: `${base}${quote}`,
         side,
-        triggerPrice,
+        trigger,
         direction,
         price,
         quantity,
@@ -64,10 +64,10 @@ class Db {
           state: {
             currentPrice: ticker.currentClose,
             distance:
-              new BigNumber(o.triggerPrice)
+              new BigNumber(o.trigger)
                 .minus(ticker.currentClose)
                 .absoluteValue()
-                .dividedBy(o.triggerPrice)
+                .dividedBy(o.trigger)
                 .multipliedBy(100)
                 .toFixed(2)
                 .toString() + '%'
@@ -86,33 +86,11 @@ class Db {
       .value()
   }
 
-  setSnipe(base, quote, minPrice, maxPrice, budget, state, opts) {
+  recordHistory(obj) {
     this.db
-      .set('snipe', {
-        base,
-        quote,
-        pair: `${base}${quote}`,
-        minPrice,
-        maxPrice,
-        budget,
-        opts,
-        state
-      })
+      .get('history')
+      .push(obj)
       .write()
-  }
-
-  getSnipe() {
-    const snipe = this.db.get('snipe').value()
-
-    if (_.isEmpty(snipe)) {
-      return null
-    }
-
-    return snipe
-  }
-
-  clearSnipe() {
-    this.db.set('snipe', {}).write()
   }
 }
 

@@ -1,13 +1,17 @@
-import db from './db'
-import binance from './binance'
-import execute from 'controlled-schedule'
 import async from 'awaitable-async'
 import BigNumber from 'bignumber.js'
-import { log } from './logger'
-import ui from './ui'
+
+import binance from '../binance'
+import db from '../db'
+import { log } from '../logger'
+import ui from '../ui'
 
 class Monitor {
   async start() {
+    const ok = await binance.sync()
+    if (!ok) {
+      return
+    }
     this.listen()
   }
 
@@ -20,8 +24,8 @@ class Monitor {
         ui.update(grouped)
 
         async.each(orders, order => {
-          const above = order.direction === '>' && ticker.currentClose >= order.triggerPrice
-          const below = order.direction === '<' && ticker.currentClose <= order.triggerPrice
+          const above = order.direction === '>' && ticker.currentClose >= order.trigger
+          const below = order.direction === '<' && ticker.currentClose <= order.trigger
           if (above || below) {
             if (order.side === 'SELL') {
               this.triggerSell(order)
@@ -35,18 +39,6 @@ class Monitor {
         })
       })
     })
-
-    const snipe = db.getSnipe()
-    if (snipe) {
-      /*
-      execute(this.checkDealChanges.bind(this))
-        .every('1s')
-        .start() */
-
-      await binance.ws.onTicker(snipe.pair, async ticker => {
-        console.log(ticker)
-      })
-    }
   }
 
   async triggerSell(order) {

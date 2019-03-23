@@ -1,0 +1,200 @@
+{"level":"error","message":{}}
+{"level":"error","message":{}}
+{"message":"spread-buy requires a minimum of 2 orders","level":"error"}
+{"message":"spread-buy requires a minimum of 2 orders","level":"error"}
+{"message":"spread-buy requires a minimum of 2 orders","level":"error"}
+{"message":"spread-buy requires a minimum of 2 orders","level":"error"}
+{"message":"spread-buy requires a minimum of 2 orders","level":"error"}
+{"message":"spread-buy requires a minimum of 2 orders","level":"error"}
+{"message":"spread-buy requires a minimum of 2 orders","level":"error"}
+{"message":"spread-buy requires a minimum of 2 orders","level":"error"}
+{"message":"spread-buy requires a minimum of 2 orders","level":"error"}
+{"level":"error"}
+{"level":"error"}
+{"level":"error"}
+{"level":"error"}
+{"message":"Parameter 'newClientOrderId' was empty.","level":"error"}
+{"message":"Parameter 'newClientOrderId' was empty.","level":"error"}
+{"message":"Precision is over the maximum defined for this asset.","level":"error"}
+{"message":"Precision is over the maximum defined for this asset.","level":"error"}
+{"message":"Filter failure: LOT_SIZE","level":"error"}
+{"message":"Filter failure: LOT_SIZE","level":"error"}
+{"level":"error","message":{}}
+{"level":"error","message":{}}
+{"level":"error","message":{}}
+{"level":"error","message":{}}
+{"level":"error","message":{}}
+{"level":"error","message":{}}
+{"message":"Filter failure: LOT_SIZE","level":"error"}
+{"message":"Filter failure: LOT_SIZE","level":"error"}
+{"level":"error","message":{}}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order quantity too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Min: 0.00000000 Max: 0.00000000","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Min: 0.00000000 Max: 0.00000000","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Min: 0.00000000 Max: 0.00000000","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Min: 0.00000000 Max: 0.00000000","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Min: 0.00000000 Max: 0.00000000","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Min: 0.00000000 Max: 0.00000000","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Min: 0.00000000 Max: 0.00000000","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Min: 0.00000000 Max: 0.00000000","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Min: 0.00000000 Max: 0.00000000","level":"error"}
+{"message":"Order price too small for this asset","level":"error"}
+{"message":"Min: 0.00000000 Max: 0.00000000","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Notional value is too small (quantity * price)","level":"error"}
+{"message":"Min: 0.00100000","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1571427","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1490456386","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1409781015","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1329312792","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1249096955","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1169169218","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1089455772","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1010025664","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0930814609","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.085185594","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.077320594","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0694749609","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0616545664","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0538610772","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0460909218","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0383471955","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0306272792","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0229326015","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0152636386","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0076192","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1571427","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1490456386","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1409781015","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1329312792","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1249096955","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1169169218","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1089455772","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.1010025664","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0930814609","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.085185594","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.077320594","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0694749609","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0616545664","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0538610772","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0460909218","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0383471955","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0306272792","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0229326015","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0152636386","level":"error"}
+{"message":"Notional value is too small (quantity * price)\nMin: 0.00100000 Order: 0.0076192","level":"error"}
+{"message":"Command cancelled","level":"error"}
+{"level":"error","message":{}}
+{"level":"error","message":{}}

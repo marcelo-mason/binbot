@@ -2,6 +2,7 @@ import { BinanceWS, BinanceRest } from 'binance'
 import moment from 'moment'
 import async from 'awaitable-async'
 import _ from 'lodash'
+
 import BigNumber from 'bignumber.js'
 import { log } from './logger'
 
@@ -24,6 +25,8 @@ class Binance {
         return 50 * Math.pow(2, retryCount)
       }
     }
+
+    this.symbols = null
   }
 
   async sync() {
@@ -115,7 +118,7 @@ class Binance {
     }
   }
 
-  async createOrder(pair, side, id, quantity, price, opts) {
+  async createOrder(pair, side, id, quantity, icebergQty, price, opts) {
     const order = {
       newClientOrderId: id,
       symbol: pair,
@@ -124,12 +127,133 @@ class Binance {
       timeInForce: 'GTC',
       quantity,
       price,
-      icebergQty: opts.icebergOrder ? new BigNumber(quantity).multipliedBy(0.95).toString() : 0
+      icebergQty: icebergQty || 0
     }
-    log.verbose(order)
-    const res = await this.rest.testOrder(order)
-    log.verbose(res)
-    return res
+    try {
+      const res = await this.rest.newOrder(order)
+      return {
+        order,
+        res
+      }
+    } catch (e) {
+      log.error(e.msg)
+    }
+  }
+
+  async testOrder(pair, side, id, quantity, icebergQty, price, opts) {
+    const order = {
+      newClientOrderId: id,
+      symbol: pair,
+      side,
+      type: opts.makerOnly ? 'LIMIT_MAKER' : 'LIMIT',
+      timeInForce: 'GTC',
+      quantity,
+      price,
+      icebergQty: icebergQty || 0
+    }
+    try {
+      await this.rest.testOrder(order)
+      return { success: true }
+    } catch (e) {
+      return { success: false, msg: e.msg }
+    }
+  }
+
+  async exchangeInfo() {
+    try {
+      const data = await async.retry(this.retryOpts, this.rest.exchangeInfo.bind(this.rest))
+      this.symbols = data.symbols
+    } catch (e) {
+      log.error('Could not retreive exchange info', e)
+      return false
+    }
+  }
+
+  async getExchangeInfo(pair) {
+    if (!this.symbols) {
+      await this.exchangeInfo()
+    }
+
+    const found = _.find(this.symbols, { symbol: pair })
+
+    function toPrecision(a) {
+      const s = a
+        .toString()
+        .replace(/([0-9]+(\.[0-9]+[1-9])?)(\.?0+$)/, '$1')
+        .split('.')
+
+      if (s.length > 1) {
+        return s[1].length
+      }
+      return 0
+    }
+
+    const mnao = _.find(found.filters, { filterType: 'MAX_NUM_ALGO_ORDERS' })
+    const lotSize = _.find(found.filters, { filterType: 'LOT_SIZE' })
+    const priceFilter = _.find(found.filters, { filterType: 'PRICE_FILTER' })
+    const notional = _.find(found.filters, { filterType: 'MIN_NOTIONAL' })
+
+    const validator = (value, min, max, step) => {
+      const minRule = value >= min
+      const maxRule = value <= max
+      const tickRule =
+        new BigNumber(value)
+          .minus(min)
+          .modulo(step)
+          .toString() == 0
+
+      if (min > 0 && !minRule) {
+        return false
+      }
+      if (max > 0 && !maxRule) {
+        return false
+      }
+      if (min > 0 && step > 0 && !tickRule) {
+        return false
+      }
+      return true
+    }
+
+    const obj = {
+      icebergAllowed: found.icebergAllowed,
+      maxAlgoOrders: mnao.maxNumAlgoOrders,
+      precision: {
+        base: found.baseAssetPrecision,
+        quote: found.quotePrecision,
+        qty: toPrecision(lotSize.stepSize),
+        price: toPrecision(priceFilter.tickSize)
+      },
+      notional: {
+        min: notional.minNotional
+      },
+      qty: {
+        min: new BigNumber(lotSize.minQty).toFixed(toPrecision(lotSize.stepSize)).toString(),
+        max: new BigNumber(lotSize.maxQty).toFixed(toPrecision(lotSize.stepSize)).toString(),
+        step: lotSize.stepSize
+      },
+      price: {
+        min: new BigNumber(priceFilter.minPrice)
+          .toFixed(toPrecision(priceFilter.tickSize))
+          .toString(),
+        max: new BigNumber(priceFilter.maxPrice)
+          .toFixed(toPrecision(priceFilter.tickSize))
+          .toString(),
+        step: priceFilter.tickSize
+      },
+      validate: {
+        qty: quantity => {
+          return validator(quantity, lotSize.minQty, lotSize.maxQty, lotSize.stepSize)
+        },
+        value: (price, quantity) => {
+          return new BigNumber(price).multipliedBy(quantity).gt(notional.minNotional)
+        },
+        price: price => {
+          return validator(price, priceFilter.minPrice, priceFilter.maxPrice, priceFilter.tickSize)
+        }
+      }
+    }
+
+    return obj
   }
 }
 

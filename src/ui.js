@@ -23,7 +23,7 @@ class UI {
         order.side,
         order.price,
         order.quantity === 'tbd' ? `${order.percentage}%` : order.quantity,
-        order.triggerPrice,
+        order.trigger,
         order.state.currentPrice,
         order.state.distance
       ]

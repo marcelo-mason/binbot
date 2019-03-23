@@ -1,52 +1,68 @@
 import winston from 'winston'
-import color from 'colors'
+import chalk from 'chalk'
 
-const logger = winston.createLogger({
-  transports: [new winston.transports.File({ filename: 'combined.log' })]
+export const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [
+    //
+    // - Write to all logs with level `info` and below to `combined.log`
+    // - Write all logs error (and below) to `error.log`.
+    //
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
 })
 
-function parse(text) {
-  if (text === undefined || text === null) {
-    text = ''
-  }
-  return text
-}
-
 export const log = {
-  log: text => {
-    console.log(parse(text))
+  log: (...args) => {
+    console.log(...args)
   },
-  info: text => {
-    console.log(color.white(parse(text)))
-    logger.info(parse(text))
+  info: (...args) => {
+    console.log('')
+    console.log(...args.map(x => chalk.blue(x)))
+    logger.info(...args)
   },
-  verbose: text => {
-    logger.verbose(parse(text))
+  debug: (...args) => {
+    console.log('')
+    console.log(...args.map(x => chalk.magenta(x)))
+    logger.debug(...args)
   },
-  error: text => {
-    console.log(color.red(parse(text)))
-    logger.error(text)
+  verbose: (...args) => {
+    console.log('')
+    console.log(...args)
+    logger.verbose(...args)
+  },
+  warn: (...args) => {
+    console.log('')
+    console.log(...args.map(x => chalk.yellow(x)))
+    logger.warn(...args)
+  },
+  error: (...args) => {
+    console.log('')
+    console.log(...args.map(x => chalk.red(x)))
+    logger.error(...args)
   },
   sellTriggered: (order, ticker) => {
-    this.info(
+    logger.info(
       'order triggered',
-      `p:${order.base}${order.quote} t:${order.direction}${order.triggerPrice} p:${order.price} q:${
+      `p:${order.base}${order.quote} t:${order.direction}${order.trigger} p:${order.price} q:${
         order.percentage
       }%`
     )
-    this.verbose(ticker)
+    logger.verbose(ticker)
   },
   buyTriggered: (order, ticker) => {
-    this.info(
+    logger.info(
       'order triggered',
-      `p:${order.base}${order.quote} t:${order.direction}${order.triggerPrice} p:${order.price} q:${
+      `p:${order.base}${order.quote} t:${order.direction}${order.trigger} p:${order.price} q:${
         order.quantity
       }%`
     )
-    this.verbose(ticker)
+    logger.verbose(ticker)
   },
   deferredCalculation: (order, freeBalance) => {
-    this.info(
+    logger.info(
       `Calculating deferred percentage: ${order.percentage}% of ${freeBalance} ${order.base} = ${
         order.quantity
       }`

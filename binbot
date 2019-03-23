@@ -1,2 +1,2 @@
 #!/bin/sh
-node -r dotenv/config src/loaders/binbot.js "$@" 
+node -r dotenv/config src/binbot.js "$@" 
