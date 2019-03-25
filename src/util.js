@@ -16,3 +16,7 @@ export function colorizeColumns(arr) {
 export function addQuoteSuffix(arr, quote) {
   return arr.map(line => [line[0], `${line[1]} ${quote}`, line[2], `${line[3]} ${quote}`, line[4]])
 }
+
+export function timestamp() {
+  return Math.round(new Date().getTime() / 1000)
+}

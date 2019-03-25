@@ -7,7 +7,7 @@ import chalk from 'chalk'
 
 import db from '../db'
 import binance from '../binance'
-import { bn, colorizeColumns, addQuoteSuffix } from '../util'
+import { bn, colorizeColumns, addQuoteSuffix, timestamp } from '../util'
 import { log } from '../logger'
 
 const index = {
@@ -17,6 +17,7 @@ const index = {
   cost: 3,
   validation: 4
 }
+
 export default async function spreadBuy(
   base,
   quote,
@@ -42,7 +43,7 @@ export default async function spreadBuy(
     return
   }
 
-  // fix price precision
+  // fix inputted prices
   currentPrice = bn(currentPrice)
     .toFixedDown(ei.precision.price)
     .toString()
@@ -107,7 +108,6 @@ export default async function spreadBuy(
   // calculate quantities spreads
 
   const { quantity, quoteToSpend } = await calculateQuantity(
-    quote,
     min,
     max,
     qtyType,
@@ -136,9 +136,11 @@ export default async function spreadBuy(
     quantities = Array(orderCount).fill(portion.toFixedDown(ei.precision.quantity).toString())
   }
 
+  // generate payload
+
   const payload = _.zip(_.range(1, orderCount + 1), prices, quantities)
 
-  // calculate costs
+  // calculate and add in costs
 
   payload.forEach(o => {
     o.push(
@@ -149,63 +151,17 @@ export default async function spreadBuy(
     )
   })
 
-  // error correct quantities that are based on quote
+  // error correct payload quantities
 
   if (qtyType === 'percent' || qtyType === 'quote') {
-    const totalCost = payload.reduce((acc, curr) => {
-      return bn(acc).plus(curr[index.cost])
-    }, 0)
-
-    const diff = bn(quoteToSpend)
-      .minus(totalCost)
-      .toString()
-
-    log.debug('diff', diff)
-    log.debug('dist', dist)
-
-    let line, newQty
-    if (dist === 'asc') {
-      line = payload[payload.length - 1]
-    } else {
-      line = payload[0]
-    }
-
-    const linePrice = line[index.price]
-    const lineQty = line[index.quantity]
-    const remainsQty = bn(bn(diff).absoluteValue()).dividedBy(linePrice)
-
-    /*
-    log.debug('quantity', quoteToSpend)
-    log.debug('quoteToSpend', quoteToSpend)
-    log.debug('totalCost', totalCost.toString())
-    log.debug('linePrice', linePrice)
-    log.debug('lineQty', lineQty)
-    log.debug('remainsQty', remainsQty.toString())
-    */
-
-    if (diff > 0) {
-      newQty = bn(remainsQty)
-        .plus(lineQty)
-        .toFixedDown(ei.precision.quantity)
-        .toString()
-    } else {
-      newQty = bn(lineQty)
-        .minus(remainsQty)
-        .toFixedDown(ei.precision.quantity)
-        .toString()
-    }
-
-    log.debug('newQty', newQty)
-
-    line[index.quantity] = newQty
-
-    line[index.cost] = bn(line[index.price])
-      .multipliedBy(line[index.quantity])
-      .toFixedDown(ei.precision.quote)
-      .toString()
+    errorCorrectQuantities(payload, quoteToSpend, dist, ei)
   }
 
-  // craft message
+  // add validation results to payload
+
+  validatePayload(payload, pair, opts, ei)
+
+  // display data to user
 
   const details = [
     [`Current price`, `${currentPrice} ${quote}`],
@@ -219,8 +175,164 @@ export default async function spreadBuy(
   log.log(asTable(colorizeColumns(details)))
   log.log()
 
-  // validate and add validation results to display
+  const list = asTable([['#', 'Price', 'Quantity', 'Cost', ''], ...addQuoteSuffix(payload, quote)])
 
+  log.log(`ORDERS:`)
+  log.log()
+  log.log(list)
+  log.log()
+
+  const totalCost = payload.reduce((acc, curr) => {
+    return bn(acc).plus(curr[index.cost])
+  }, 0)
+
+  const percent = bn(totalCost)
+    .dividedBy(quoteBalance)
+    .times(100)
+    .toFixed(0)
+    .toString()
+
+  const corrected = [
+    [`${base} to buy`, `${quantity} ${base}`],
+    [`${quote} to spend`, `${totalCost} ${quote} (${percent}%)`]
+  ]
+
+  log.log()
+  log.log(asTable(colorizeColumns(corrected)))
+  log.log()
+
+  // execute prompt
+
+  let res = await prompts({
+    type: 'confirm',
+    name: 'correct',
+    message: 'Create orders?'
+  })
+
+  // create orders
+
+  if (res.correct) {
+    if (opts.cancelStops) {
+      await binance.cancelStops(pair)
+    }
+
+    await async.eachSeries(payload, async o => {
+      // calculate iceberg
+      const iceburgQty = opts.iceberg
+        ? bn(o[index.quantity])
+            .multipliedBy(0.95)
+            .toFixedDown(ei.precision.quantity)
+        : 0
+
+      // create order
+      const { order, res } = await binance.createOrder(
+        pair,
+        'BUY',
+        idable(8, false),
+        o[index.quantity],
+        iceburgQty,
+        o[index.price],
+        opts
+      )
+
+      db.recordOrderHistory({
+        timestamp: timestamp(),
+        order,
+        res
+      })
+    })
+  }
+}
+
+async function calculateQuantity(min, max, qtyType, qtyValue, ei, quoteBalance) {
+  if (qtyType === 'base') {
+    return {
+      quantity: qtyValue,
+      quoteToSpend: null
+    }
+  }
+
+  if (qtyType === 'quote' || qtyType === 'percent') {
+    let quoteToSpend = qtyValue
+
+    if (qtyType === 'percent') {
+      quoteToSpend = bn(quoteBalance)
+        .multipliedBy(qtyValue)
+        .dividedBy(100)
+        .toString()
+    }
+
+    const avgPrice = bn(max)
+      .plus(min)
+      .dividedBy(2)
+      .toString()
+
+    const quantity = bn(quoteToSpend)
+      .dividedBy(avgPrice)
+      .toFixed(ei.precision.quantity)
+      .toString()
+
+    return {
+      quantity,
+      quoteToSpend: bn(quoteToSpend)
+        .toFixed(ei.precision.quote)
+        .toString()
+    }
+  }
+}
+
+function errorCorrectQuantities(payload, quoteToSpend, dist, ei) {
+  const totalCost = payload.reduce((acc, curr) => {
+    return bn(acc).plus(curr[index.cost])
+  }, 0)
+
+  const diff = bn(quoteToSpend)
+    .minus(totalCost)
+    .toString()
+
+  let line, newQty
+  if (dist === 'asc') {
+    line = payload[payload.length - 1]
+  } else {
+    line = payload[0]
+  }
+
+  const linePrice = line[index.price]
+  const lineQty = line[index.quantity]
+  const remainsQty = bn(bn(diff).absoluteValue()).dividedBy(linePrice)
+
+  if (diff > 0) {
+    newQty = bn(remainsQty)
+      .plus(lineQty)
+      .toFixedDown(ei.precision.quantity)
+      .toString()
+  } else {
+    newQty = bn(lineQty)
+      .minus(remainsQty)
+      .toFixedDown(ei.precision.quantity)
+      .toString()
+  }
+  line[index.quantity] = newQty
+
+  line[index.cost] = bn(line[index.price])
+    .multipliedBy(line[index.quantity])
+    .toFixedDown(ei.precision.quote)
+    .toString()
+
+  /*
+    log.debug('diff', diff)
+    log.debug('dist', dist)
+    log.debug('quantity', quoteToSpend)
+    log.debug('quoteToSpend', quoteToSpend)
+    log.debug('totalCost', totalCost.toString())
+    log.debug('linePrice', linePrice)
+    log.debug('lineQty', lineQty)
+    log.debug('remainsQty', remainsQty.toString())
+    log.debug('newQty', newQty)
+    */
+}
+
+async function validatePayload(payload, pair, opts, ei) {
   await async.eachSeries(payload, async o => {
     const price = o[index.price]
     const quantity = o[index.quantity]
@@ -260,125 +372,4 @@ export default async function spreadBuy(
       o[index.validation] = `${chalk.bold.red('failed ✖')} ${chalk.red(error || res.msg)}`
     }
   })
-
-  const list = asTable([['#', 'Price', 'Quantity', 'Cost', ''], ...addQuoteSuffix(payload, quote)])
-
-  log.log(`ORDERS:`)
-  log.log()
-  log.log(list)
-  log.log()
-
-  const totalCost = payload.reduce((acc, curr) => {
-    return bn(acc).plus(curr[index.cost])
-  }, 0)
-
-  const percent = bn(totalCost)
-    .dividedBy(quoteBalance)
-    .times(100)
-    .toFixed(0)
-    .toString()
-
-  const corrected = [
-    [`${base} to buy`, `${quantity} ${base}`],
-    [`${quote} to spend`, `${totalCost} ${quote} (${percent}%)`]
-  ]
-
-  log.log()
-  log.log(asTable(colorizeColumns(corrected)))
-  log.log()
-
-  // execute prompt
-
-  let res = await prompts({
-    type: 'confirm',
-    name: 'correct',
-    message: 'Create orders?'
-  })
-
-  // create orderCount
-
-  if (res.correct) {
-    if (opts.cancelStops) {
-      await binance.cancelStops(pair)
-    }
-
-    await async.eachSeries(payload, async o => {
-      // calculate iceberg
-      const iceburgQty = opts.iceberg
-        ? bn(o[index.quantity])
-            .multipliedBy(0.95)
-            .toFixedDown(ei.precision.quantity)
-        : 0
-
-      // create order
-      const { order, res } = await binance.createOrder(
-        pair,
-        'BUY',
-        idable(8, false),
-        o[index.quantity],
-        iceburgQty,
-        o[index.price],
-        opts
-      )
-
-      db.recordHistory({
-        order,
-        res
-      })
-    })
-  }
-}
-
-async function calculateQuantity(quote, min, max, qtyType, qtyValue, ei, quoteBalance) {
-  if (qtyType === 'base') {
-    return {
-      quantity: qtyValue,
-      quoteToSpend: null
-    }
-  }
-
-  if (qtyType === 'quote') {
-    const quoteToSpend = qtyValue
-
-    const avgPrice = bn(max)
-      .plus(min)
-      .dividedBy(2)
-      .toString()
-
-    const quantity = bn(quoteToSpend)
-      .dividedBy(avgPrice)
-      .toFixed(ei.precision.quantity)
-      .toString()
-
-    return {
-      quantity,
-      quoteToSpend: bn(quoteToSpend)
-        .toFixed(ei.precision.quote)
-        .toString()
-    }
-  }
-
-  if (qtyType === 'percent') {
-    const quoteToSpend = bn(quoteBalance)
-      .multipliedBy(qtyValue)
-      .dividedBy(100)
-      .toString()
-
-    const avgPrice = bn(max)
-      .plus(min)
-      .dividedBy(2)
-      .toString()
-
-    const quantity = bn(quoteToSpend)
-      .dividedBy(avgPrice)
-      .toFixed(ei.precision.quantity)
-      .toString()
-
-    return {
-      quantity,
-      quoteToSpend: bn(quoteToSpend)
-        .toFixed(ei.precision.quote)
-        .toString()
-    }
-  }
 }

@@ -93,6 +93,17 @@ class Db {
       .push(obj)
       .write()
   }
+
+  getLatestHistory(ac) {
+    return this.db
+      .get('history')
+      .filter({
+        ac
+      })
+      .sortBy('timestamp')
+      .take(1)
+      .value()
+  }
 }
 
 export default new Db()

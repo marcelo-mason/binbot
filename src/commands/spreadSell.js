@@ -265,8 +265,6 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
         o[index.price],
         opts
       )
-
-      db.recordHistory({ order, res })
     })
   }
 }

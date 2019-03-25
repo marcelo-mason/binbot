@@ -1,12 +1,15 @@
 import inquirer from 'inquirer'
 import { Subject } from 'rxjs'
+import _ from 'lodash'
 
+import db from './db'
 import binance from './binance'
 import commands from './commands'
 import { log } from './logger'
-import { bn } from './util'
+import { bn, timestamp } from './util'
 
 let ei = null
+let latest = null
 
 const action = {
   type: 'list',
@@ -36,11 +39,17 @@ const spreadBuy = [
   async function(prev) {
     return {
       type: 'autocomplete',
-      name: 'sb|0',
+      name: 'sb_0',
       pageSize: '4',
       message: 'Which a pair are you trading?',
       source: async (answersSoFar, input) => {
-        return binance.getMatchingPairs(input)
+        return new Promise(async resolve => {
+          const matching = await binance.getMatchingPairs(input)
+          if (latest) {
+            matching.unshift(latest['sb_0'])
+          }
+          resolve(matching)
+        })
       }
     }
   },
@@ -52,11 +61,14 @@ const spreadBuy = [
 
     return {
       type: 'autocomplete',
-      name: 'sb|1',
+      name: 'sb_1',
       message: `Whats the min price?`,
       suggestOnly: true,
       source: async answers => {
         return new Promise(async resolve => {
+          if (latest) {
+            resolve([latest['sb_1'] || currentPrice])
+          }
           resolve([currentPrice])
         })
       },
@@ -68,12 +80,16 @@ const spreadBuy = [
   async function(prev) {
     return {
       type: 'autocomplete',
-      name: 'sb|2',
+      name: 'sb_2',
       message: `Whats the max price?`,
       suggestOnly: true,
       source: async answers => {
         return new Promise(async resolve => {
-          resolve([answers['sb|1']])
+          if (latest) {
+            resolve([latest['sb_2'] || answers['sb_1']])
+            return
+          }
+          resolve([answers['sb_1']])
         })
       },
       validate: answer => {
@@ -84,8 +100,11 @@ const spreadBuy = [
   async function(prev) {
     return {
       type: 'list',
-      name: 'sb|3',
+      name: 'sb_3',
       message: 'How to supply the amount to buy?',
+      default: () => {
+        return latest ? latest['sb_3'] : null
+      },
       choices: [
         {
           name: `Percent of ${ei.quote}`,
@@ -110,8 +129,10 @@ const spreadBuy = [
     if (prev === 'percent') {
       return {
         type: 'input',
-        name: 'sb|4',
-        default: '100',
+        name: 'sb_4',
+        default: () => {
+          return latest ? latest['sb_4'] : 100
+        },
         message: `What percentage of your ${quoteBalance} ${ei.quote} would you like to spend?`,
         validate: answer => {
           return !isNaN(answer) && bn(answer).gt(0)
@@ -121,7 +142,10 @@ const spreadBuy = [
     if (prev === 'base') {
       return {
         type: 'input',
-        name: 'sb|4',
+        name: 'sb_4',
+        default: () => {
+          return latest ? latest['sb_4'] : null
+        },
         message: `How many ${ei.base} would you like to buy?`,
         validate: answer => {
           return !isNaN(answer) && bn(answer).gt(0)
@@ -131,11 +155,15 @@ const spreadBuy = [
     if (prev === 'quote') {
       return {
         type: 'autocomplete',
-        name: 'sb|4',
+        name: 'sb_4',
         message: `How many ${ei.quote} would you like to spend?`,
         suggestOnly: true,
         source: async answers => {
           return new Promise(async resolve => {
+            if (latest) {
+              resolve([latest['sb_4'] || quoteBalance])
+              return
+            }
             resolve([quoteBalance])
           })
         },
@@ -148,8 +176,10 @@ const spreadBuy = [
   async function(prev) {
     return {
       type: 'orders',
-      name: 'sb|5',
-      default: '10',
+      name: 'sb_5',
+      default: () => {
+        return latest ? latest['sb_5'] : 10
+      },
       message: 'How many orders to make?',
       validate: answer => {
         return !isNaN(answer) && bn(answer).gt(0)
@@ -159,7 +189,10 @@ const spreadBuy = [
   async function(prev) {
     return {
       type: 'list',
-      name: 'sb|6',
+      name: 'sb_6',
+      default: () => {
+        return latest ? latest['sb_6'] : null
+      },
       message: 'How should the amounts be distributed?',
       choices: [
         {
@@ -171,7 +204,7 @@ const spreadBuy = [
           value: 'desc'
         },
         {
-          name: `Equally`,
+          name: `Equal`,
           value: 'equal'
         }
       ]
@@ -180,13 +213,16 @@ const spreadBuy = [
   async function(prev) {
     return {
       type: 'checkbox-plus',
-      name: 'sb|7',
+      name: 'sb_7',
       message: `Order properties`,
+      default: () => {
+        return latest ? latest['sb_7'] : null
+      },
       source: async answers => {
         return new Promise(async resolve => {
           resolve([
             {
-              name: `Iceberg Order - Only 95% visible`,
+              name: `Iceberg Order - 95% hidden`,
               value: 'iceberg'
             },
             {
@@ -245,12 +281,14 @@ class Inquire {
   }
 
   async onEachAnswer(o) {
-    let [command, question] = o.name.split('|')
+    let [command, question] = o.name.split('_')
 
     // handle action choice
     if (command === 'ac') {
       command = o.answer
       question = -1
+      const dbLatest = db.getLatestHistory(command)
+      latest = _.isEmpty(dbLatest) ? latest : dbLatest[0]
     }
 
     const next = parseInt(question) + 1
@@ -290,28 +328,34 @@ class Inquire {
 
   async parseAnswers(answers) {
     /*             
-      'sb|0': 'LTCBTC',       
-      'sb|1': '0.014959',     
-      'sb|2': '0.014959',     
-      'sb|3': 'percent',            
-      'sb|4': '100',          
-      'sb|5': '2',            
-      'sb|6': 'ascending',    
-      'sb|7': [ 'iceberg' ] 
+      'sb_0': 'LTCBTC',       
+      'sb_1': '0.014959',     
+      'sb_2': '0.014959',     
+      'sb_3': 'percent',            
+      'sb_4': '100',          
+      'sb_5': '2',            
+      'sb_6': 'ascending',    
+      'sb_7': [ 'iceberg' ] 
   */
 
     switch (answers.ac) {
       case 'sb':
-        const min = answers['sb|1']
-        const max = answers['sb|2']
-        const qtyType = answers['sb|3']
-        const qtyValue = answers['sb|4']
-        const orderCount = answers['sb|5']
-        const dist = answers['sb|6']
-        const opts = answers['sb|7'].reduce((acc, curr) => {
+        const min = answers['sb_1']
+        const max = answers['sb_2']
+        const qtyType = answers['sb_3']
+        const qtyValue = answers['sb_4']
+        const orderCount = answers['sb_5']
+        const dist = answers['sb_6']
+        const opts = answers['sb_7'].reduce((acc, curr) => {
           acc[curr] = true
           return acc
         }, {})
+
+        await db.recordHistory({
+          timestamp: timestamp(),
+          ...answers,
+          opts
+        })
 
         await commands.spreadBuy(
           ei.base,
