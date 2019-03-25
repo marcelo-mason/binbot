@@ -1,5 +1,4 @@
 import prompts from 'prompts'
-import BigNumber from 'bignumber.js'
 import _ from 'lodash'
 import async from 'awaitable-async'
 import asTable from 'as-table'
@@ -8,9 +7,10 @@ import chalk from 'chalk'
 
 import db from '../db'
 import binance from '../binance'
+import { bn } from '../util'
 import { log } from '../logger'
 
-export default async function spreadSell(base, quote, min, max, percentage, orders, opts) {
+export default async function spreadSell(base, quote, min, max, percentage, orderCount, opts) {
   const pair = `${base}${quote}`
 
   const ei = await binance.getExchangeInfo(pair)
@@ -19,7 +19,9 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
   }
 
   const bal = await binance.balance(base)
-  let freeBalance = new BigNumber(bal).toFixedDown(ei.precision.quantity).toString()
+  let freeBalance = bn(bal)
+    .toFixedDown(ei.precision.quantity)
+    .toString()
 
   // log.info(ei)
 
@@ -29,13 +31,19 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
   }
 
   // fix price precision
-  currentPrice = new BigNumber(currentPrice).toFixedDown(ei.precision.price).toString()
-  min = new BigNumber(min).toFixedDown(ei.precision.price).toString()
-  max = new BigNumber(max).toFixedDown(ei.precision.price).toString()
+  currentPrice = bn(currentPrice)
+    .toFixedDown(ei.precision.price)
+    .toString()
+  min = bn(min)
+    .toFixedDown(ei.precision.price)
+    .toString()
+  max = bn(max)
+    .toFixedDown(ei.precision.price)
+    .toString()
 
   // check for iceberg limitation
   if (!ei.icebergAllowed && opts.iceberg) {
-    log.warn('Iceberg orders not allowed on this asset.')
+    log.warn('Iceberg orderCount not allowed on this asset.')
     opts.iceberg = false
   }
 
@@ -44,7 +52,7 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
     if (stops) {
       // add the tokens locked in the stops to the freeBalance
       // since they will get freed once the stops are cancelled
-      freeBalance = new BigNumber(freeBalance)
+      freeBalance = bn(freeBalance)
         .plus(stops.totalQuantity)
         .toFixedDown(ei.precision.quantity)
         .toString()
@@ -53,41 +61,45 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
     }
   }
 
-  // default order to 10 orders
-  orders = parseInt(orders) || 10
-  if (orders < 2) {
-    log.error('<orders> must be > 1')
+  // default order to 10 orderCount
+  orderCount = parseInt(orderCount) || 10
+  if (orderCount < 2) {
+    log.error('<orderCount> must be > 1')
     return
   }
 
   // calculate distance / spread
 
-  const sellDistance = new BigNumber(currentPrice)
+  const sellDistance = bn(currentPrice)
     .minus(min)
     .dividedBy(currentPrice)
     .multipliedBy(100)
     .toFixedDown(2)
     .toString()
 
-  const spreadWidth = new BigNumber(max)
+  const spreadWidth = bn(max)
     .minus(min)
     .toFixedDown(ei.precision.price)
     .toString()
 
-  const spreadWidthPercent = new BigNumber(spreadWidth)
+  const spreadWidthPercent = bn(spreadWidth)
     .dividedBy(max)
     .absoluteValue()
     .toFixedDown(2)
     .toString()
 
-  const spreadDistance = new BigNumber(spreadWidth).dividedBy(orders - 1).toString()
+  const spreadDistance = bn(spreadWidth)
+    .dividedBy(orderCount - 1)
+    .toString()
 
   // calculate prices spread
 
-  const prices = _.range(orders)
+  const prices = _.range(orderCount)
     .map(n => {
-      const distance = new BigNumber(spreadDistance).multipliedBy(n).toString()
-      return new BigNumber(min)
+      const distance = bn(spreadDistance)
+        .multipliedBy(n)
+        .toString()
+      return bn(min)
         .plus(distance)
         .toFixedDown(ei.precision.price)
         .toString()
@@ -96,18 +108,20 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
 
   // calculate quantities spreads
 
-  const quantity = new BigNumber(freeBalance)
+  const quantity = bn(freeBalance)
     .multipliedBy(percentage)
     .dividedBy(100)
     .toFixedDown(ei.precision.quantity)
     .toString()
 
-  const portion = new BigNumber(quantity).dividedBy(orders)
-  const unit = new BigNumber(portion).dividedBy(orders + 1).toString()
-  const multiples = _.range(2, orders * 2 + 2, 2)
+  const portion = bn(quantity).dividedBy(orderCount)
+  const unit = bn(portion)
+    .dividedBy(orderCount + 1)
+    .toString()
+  const multiples = _.range(2, orderCount * 2 + 2, 2)
   let quantities = multiples.map(r =>
     parseFloat(
-      new BigNumber(r)
+      bn(r)
         .multipliedBy(unit)
         .toFixedDown(ei.precision.quantity)
         .toString()
@@ -117,10 +131,10 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
     quantities = quantities.reverse()
   }
   if (!opts.ascending && !opts.descending) {
-    quantities = Array(orders).fill(portion.toFixedDown(ei.precision.quantity).toString())
+    quantities = Array(orderCount).fill(portion.toFixedDown(ei.precision.quantity).toString())
   }
 
-  const payload = _.zip(_.range(1, orders + 1), prices, quantities)
+  const payload = _.zip(_.range(1, orderCount + 1), prices, quantities)
 
   const index = {
     number: 0,
@@ -134,7 +148,7 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
 
   payload.forEach(o => {
     o.push(
-      new BigNumber(o[index.price])
+      bn(o[index.price])
         .multipliedBy(o[index.quantity])
         .toFixedDown(ei.precision.quote)
         .toString()
@@ -188,7 +202,9 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
 
     // calculate iceberg
     const iceburgQty = opts.iceberg
-      ? new BigNumber(quantity).multipliedBy(0.95).toFixedDown(ei.precision.quantity)
+      ? bn(quantity)
+          .multipliedBy(0.95)
+          .toFixedDown(ei.precision.quantity)
       : 0
 
     // test order
@@ -221,10 +237,10 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
   let res = await prompts({
     type: 'confirm',
     name: 'correct',
-    message: 'Execute orders?'
+    message: 'Create orders?'
   })
 
-  // create orders
+  // create orderCount
 
   if (res.correct) {
     if (opts.cancelStops) {
@@ -234,7 +250,9 @@ export default async function spreadSell(base, quote, min, max, percentage, orde
     await async.eachSeries(payload, async o => {
       // calculate iceberg
       const iceburgQty = opts.iceberg
-        ? new BigNumber(o[index.quantity]).multipliedBy(0.95).toFixedDown(ei.precision.quantity)
+        ? bn(o[index.quantity])
+            .multipliedBy(0.95)
+            .toFixedDown(ei.precision.quantity)
         : 0
 
       // create order

@@ -1,10 +1,10 @@
 import prompts from 'prompts'
 import chalk from 'chalk'
-import BigNumber from 'bignumber.js'
 import asTable from 'as-table'
 
 import db from '../db'
 import binance from '../binance'
+import { bn } from '../util'
 import { log } from '../logger'
 
 export default async function triggerSell(base, quote, trigger, price, percentage, opts) {
@@ -28,19 +28,21 @@ export default async function triggerSell(base, quote, trigger, price, percentag
     if (stops) {
       // add the tokens locked in the stops to the freeBalance
       // since they will get freed once the stops are cancelled
-      freeBalance = new BigNumber(freeBalance).plus(stops.totalQuantity).toString()
+      freeBalance = bn(freeBalance)
+        .plus(stops.totalQuantity)
+        .toString()
 
       // the cancelling happens later when it gets triggered
     }
   }
 
   const direction = trigger < currentPrice ? '<' : '>'
-  const quantity = new BigNumber(freeBalance)
+  const quantity = bn(freeBalance)
     .multipliedBy(percentage)
     .dividedBy(100)
     .toString()
 
-  const triggerDistance = new BigNumber(currentPrice)
+  const triggerDistance = bn(currentPrice)
     .minus(trigger)
     .absoluteValue()
     .dividedBy(currentPrice)
@@ -48,7 +50,7 @@ export default async function triggerSell(base, quote, trigger, price, percentag
     .toFixed(2)
     .toString()
 
-  const sellDistance = new BigNumber(trigger)
+  const sellDistance = bn(trigger)
     .minus(price)
     .absoluteValue()
     .dividedBy(trigger)

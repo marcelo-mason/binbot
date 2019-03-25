@@ -3,9 +3,7 @@ import program from 'commander'
 import commands from './commands'
 import { log } from './logger'
 import ui from './ui'
-import util from './util'
-
-util.init()
+import inquire from './inquire'
 
 process.on('unhandledRejection', log.error)
 
@@ -53,7 +51,7 @@ program
       opts
     )
   })
-
+/*
 program
   .command('spread-buy <base> <quote> <min> <max> <quantity> [orders]')
   .description('Sets limit-buys across a price range')
@@ -66,7 +64,7 @@ program
     }
     commands.spreadBuy(base.toUpperCase(), quote.toUpperCase(), min, max, quantity, orders, opts)
   })
-
+*/
 program
   .command('spread-sell <base> <quote> <min> <max> <percentage> [orders]')
   .description('Sets limit-sells across a price range')
@@ -117,5 +115,7 @@ program.on('--help', () => {
 
 program.parse(process.argv)
 if (!process.argv.slice(2).length) {
-  program.help()
+  ;(async function() {
+    await inquire.start()
+  })()
 }

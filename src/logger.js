@@ -9,7 +9,6 @@ export const logger = winston.createLogger({
     // - Write to all logs with level `info` and below to `combined.log`
     // - Write all logs error (and below) to `error.log`.
     //
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
     new winston.transports.File({ filename: 'combined.log' })
   ]
 })
@@ -19,28 +18,23 @@ export const log = {
     console.log(...args)
   },
   info: (...args) => {
-    console.log('')
-    console.log(...args.map(x => chalk.blue(x)))
+    console.log(chalk.blue(args[0]), ...args.slice(1))
     logger.info(...args)
   },
   debug: (...args) => {
-    console.log('')
-    console.log(...args.map(x => chalk.magenta(x)))
+    console.log(chalk.magenta(args[0]), ...args.slice(1))
     logger.debug(...args)
   },
   verbose: (...args) => {
-    console.log('')
     console.log(...args)
     logger.verbose(...args)
   },
   warn: (...args) => {
-    console.log('')
-    console.log(...args.map(x => chalk.yellow(x)))
+    console.log(chalk.bold.white(args[0]), ...args.slice(1))
     logger.warn(...args)
   },
   error: (...args) => {
-    console.log('')
-    console.log(...args.map(x => chalk.red(x)))
+    console.log(chalk.red(args[0]), ...args.slice(1))
     logger.error(...args)
   },
   sellTriggered: (order, ticker) => {

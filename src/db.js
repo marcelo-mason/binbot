@@ -1,8 +1,9 @@
 import low from 'lowdb'
 import idable from 'idable'
 import FileSync from 'lowdb/adapters/FileSync'
-import BigNumber from 'bignumber.js'
 import _ from 'lodash'
+
+import { bn } from './util'
 
 const adapter = new FileSync('db.json')
 
@@ -64,7 +65,7 @@ class Db {
           state: {
             currentPrice: ticker.currentClose,
             distance:
-              new BigNumber(o.trigger)
+              bn(o.trigger)
                 .minus(ticker.currentClose)
                 .absoluteValue()
                 .dividedBy(o.trigger)

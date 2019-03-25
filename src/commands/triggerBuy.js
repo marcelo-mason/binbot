@@ -1,10 +1,10 @@
 import prompts from 'prompts'
 import chalk from 'chalk'
-import BigNumber from 'bignumber.js'
 import asTable from 'as-table'
 
 import db from '../db'
 import binance from '../binance'
+import { bn } from '../util'
 import { log } from '../logger'
 
 export default async function triggerBuy(base, quote, trigger, price, quantity, opts) {
@@ -17,7 +17,7 @@ export default async function triggerBuy(base, quote, trigger, price, quantity, 
 
   const direction = trigger < currentPrice ? '<' : '>'
 
-  const triggerDistance = new BigNumber(currentPrice)
+  const triggerDistance = bn(currentPrice)
     .minus(trigger)
     .absoluteValue()
     .dividedBy(currentPrice)
@@ -25,7 +25,7 @@ export default async function triggerBuy(base, quote, trigger, price, quantity, 
     .toFixed(2)
     .toString()
 
-  const buyDistance = new BigNumber(trigger)
+  const buyDistance = bn(trigger)
     .minus(price)
     .absoluteValue()
     .dividedBy(trigger)

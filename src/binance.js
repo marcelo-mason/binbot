@@ -1,9 +1,11 @@
+/* eslint-disable eqeqeq */
 import { BinanceWS, BinanceRest } from 'binance'
 import moment from 'moment'
 import async from 'awaitable-async'
 import _ from 'lodash'
+import fuzzy from 'fuzzy'
 
-import BigNumber from 'bignumber.js'
+import { bn } from './util'
 import { log } from './logger'
 
 class Binance {
@@ -83,7 +85,9 @@ class Binance {
           return stop.orderId
         }),
         totalQuantity: stops.reduce((acc, curr) => {
-          return new BigNumber(acc).plus(curr.origQty).toString()
+          return bn(acc)
+            .plus(curr.origQty)
+            .toString()
         }, 0),
         stops
       }
@@ -201,7 +205,7 @@ class Binance {
       const minRule = value >= min
       const maxRule = value <= max
       const tickRule =
-        new BigNumber(value)
+        bn(value)
           .minus(min)
           .modulo(step)
           .toString() == 0
@@ -219,6 +223,8 @@ class Binance {
     }
 
     const obj = {
+      base: found.baseAsset,
+      quote: found.quoteAsset,
       icebergAllowed: found.icebergAllowed,
       maxAlgoOrders: mnao.maxNumAlgoOrders,
       precision: {
@@ -231,15 +237,19 @@ class Binance {
         min: notional.minNotional
       },
       quantity: {
-        min: new BigNumber(lotSize.minQty).toFixed(toPrecision(lotSize.stepSize)).toString(),
-        max: new BigNumber(lotSize.maxQty).toFixed(toPrecision(lotSize.stepSize)).toString(),
+        min: bn(lotSize.minQty)
+          .toFixed(toPrecision(lotSize.stepSize))
+          .toString(),
+        max: bn(lotSize.maxQty)
+          .toFixed(toPrecision(lotSize.stepSize))
+          .toString(),
         step: lotSize.stepSize
       },
       price: {
-        min: new BigNumber(priceFilter.minPrice)
+        min: bn(priceFilter.minPrice)
           .toFixed(toPrecision(priceFilter.tickSize))
           .toString(),
-        max: new BigNumber(priceFilter.maxPrice)
+        max: bn(priceFilter.maxPrice)
           .toFixed(toPrecision(priceFilter.tickSize))
           .toString(),
         step: priceFilter.tickSize
@@ -249,7 +259,9 @@ class Binance {
           return validator(quantity, lotSize.minQty, lotSize.maxQty, lotSize.stepSize)
         },
         value: (price, quantity) => {
-          return new BigNumber(price).multipliedBy(quantity).gt(notional.minNotional)
+          return bn(price)
+            .multipliedBy(quantity)
+            .gt(notional.minNotional)
         },
         price: price => {
           return validator(price, priceFilter.minPrice, priceFilter.maxPrice, priceFilter.tickSize)
@@ -258,6 +270,21 @@ class Binance {
     }
 
     return obj
+  }
+
+  async getMatchingPairs(input) {
+    input = input || ''
+    return new Promise(async resolve => {
+      if (!this.symbols) {
+        await this.exchangeInfo()
+      }
+      const symbolList = this.symbols.map(x => x.symbol)
+      const results = fuzzy.filter(input, symbolList)
+      const matches = results.map(el => {
+        return el.original
+      })
+      resolve(matches)
+    })
   }
 }
 

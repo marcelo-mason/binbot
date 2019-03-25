@@ -1,5 +1,4 @@
 import prompts from 'prompts'
-import BigNumber from 'bignumber.js'
 import _ from 'lodash'
 import async from 'awaitable-async'
 import asTable from 'as-table'
@@ -8,16 +7,35 @@ import chalk from 'chalk'
 
 import db from '../db'
 import binance from '../binance'
+import { bn, colorizeColumns, addQuoteSuffix } from '../util'
 import { log } from '../logger'
 
-export default async function spreadBuy(base, quote, min, max, totalQuantity, orders, opts) {
+const index = {
+  number: 0,
+  price: 1,
+  quantity: 2,
+  cost: 3,
+  validation: 4
+}
+export default async function spreadBuy(
+  base,
+  quote,
+  min,
+  max,
+  qtyType,
+  qtyValue,
+  dist,
+  orderCount,
+  opts
+) {
   const pair = `${base}${quote}`
 
   const ei = await binance.getExchangeInfo(pair)
   if (!ei) {
     return
   }
-  // log.info(ei)
+
+  const quoteBalance = bn(await binance.balance(quote))
 
   let currentPrice = await binance.tickerPrice(pair)
   if (!currentPrice) {
@@ -25,51 +43,61 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
   }
 
   // fix price precision
-  currentPrice = new BigNumber(currentPrice).toFixedDown(ei.precision.price).toString()
-  min = new BigNumber(min).toFixedDown(ei.precision.price).toString()
-  max = new BigNumber(max).toFixedDown(ei.precision.price).toString()
+  currentPrice = bn(currentPrice)
+    .toFixedDown(ei.precision.price)
+    .toString()
+  min = bn(min)
+    .toFixedDown(ei.precision.price)
+    .toString()
+  max = bn(max)
+    .toFixedDown(ei.precision.price)
+    .toString()
 
   // check for iceberg limitation
   if (!ei.icebergAllowed && opts.iceberg) {
-    log.warn('Iceberg orders not allowed on this asset.')
+    log.warn('Iceberg orderCount not allowed on this asset.')
     opts.iceberg = false
   }
 
-  // default order to 10 orders
-  orders = parseInt(orders) || 10
-  if (orders < 2) {
-    log.error('<orders> must be > 1')
+  // default order to 10 orderCount
+  orderCount = parseInt(orderCount) || 10
+  if (orderCount < 2) {
+    log.error('<orderCount> must be > 1')
     return
   }
 
   // calculate distance / spread
 
-  const buyDistance = new BigNumber(currentPrice)
+  const buyDistance = bn(currentPrice)
     .minus(max)
     .dividedBy(currentPrice)
     .multipliedBy(100)
     .toFixed(2)
     .toString()
 
-  const spreadWidth = new BigNumber(max)
+  const spreadWidth = bn(max)
     .minus(min)
     .toFixedDown(ei.precision.price)
     .toString()
 
-  const spreadWidthPercent = new BigNumber(spreadWidth)
+  const spreadWidthPercent = bn(spreadWidth)
     .dividedBy(max)
     .absoluteValue()
     .toFixed(2)
     .toString()
 
-  const spreadDistance = new BigNumber(spreadWidth).dividedBy(orders - 1).toString()
+  const spreadDistance = bn(spreadWidth)
+    .dividedBy(orderCount - 1)
+    .toString()
 
   // calculate prices spread
 
-  const prices = _.range(orders)
+  const prices = _.range(orderCount)
     .map(n => {
-      const distance = new BigNumber(spreadDistance).multipliedBy(n).toString()
-      return new BigNumber(min)
+      const distance = bn(spreadDistance)
+        .multipliedBy(n)
+        .toString()
+      return bn(min)
         .plus(distance)
         .toFixedDown(ei.precision.price)
         .toString()
@@ -78,69 +106,117 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
 
   // calculate quantities spreads
 
-  const portion = new BigNumber(totalQuantity).dividedBy(orders)
-  const unit = new BigNumber(portion).dividedBy(orders + 1).toString()
-  const multiples = _.range(2, orders * 2 + 2, 2)
+  const { quantity, quoteToSpend } = await calculateQuantity(
+    quote,
+    min,
+    max,
+    qtyType,
+    qtyValue,
+    ei,
+    quoteBalance
+  )
+  const multiples = _.range(2, orderCount * 2 + 2, 2)
+  const portion = bn(quantity).dividedBy(orderCount)
+  const unit = bn(portion)
+    .dividedBy(orderCount + 1)
+    .toString()
+
   let quantities = multiples.map(r =>
     parseFloat(
-      new BigNumber(r)
+      bn(r)
         .multipliedBy(unit)
         .toFixedDown(ei.precision.quantity)
         .toString()
     )
   )
-  if (opts.descending) {
+  if (dist === 'desc') {
     quantities = quantities.reverse()
   }
-  if (!opts.ascending && !opts.descending) {
-    quantities = Array(orders).fill(portion.toFixedDown(ei.precision.quantity).toString())
+  if (dist === 'equal') {
+    quantities = Array(orderCount).fill(portion.toFixedDown(ei.precision.quantity).toString())
   }
 
-  const payload = _.zip(_.range(1, orders + 1), prices, quantities)
-
-  const index = {
-    number: 0,
-    price: 1,
-    quantity: 2,
-    cost: 3,
-    validation: 4
-  }
+  const payload = _.zip(_.range(1, orderCount + 1), prices, quantities)
 
   // calculate costs
 
   payload.forEach(o => {
     o.push(
-      new BigNumber(o[index.price])
+      bn(o[index.price])
         .multipliedBy(o[index.quantity])
         .toFixedDown(ei.precision.quote)
         .toString()
     )
   })
 
-  // craft prompt
+  // error correct quantities that are based on quote
 
-  const info = asTable([
+  if (qtyType === 'percent' || qtyType === 'quote') {
+    const totalCost = payload.reduce((acc, curr) => {
+      return bn(acc).plus(curr[index.cost])
+    }, 0)
+
+    const diff = bn(quoteToSpend)
+      .minus(totalCost)
+      .toString()
+
+    log.debug('diff', diff)
+    log.debug('dist', dist)
+
+    let line, newQty
+    if (dist === 'asc') {
+      line = payload[payload.length - 1]
+    } else {
+      line = payload[0]
+    }
+
+    const linePrice = line[index.price]
+    const lineQty = line[index.quantity]
+    const remainsQty = bn(bn(diff).absoluteValue()).dividedBy(linePrice)
+
+    /*
+    log.debug('quantity', quoteToSpend)
+    log.debug('quoteToSpend', quoteToSpend)
+    log.debug('totalCost', totalCost.toString())
+    log.debug('linePrice', linePrice)
+    log.debug('lineQty', lineQty)
+    log.debug('remainsQty', remainsQty.toString())
+    */
+
+    if (diff > 0) {
+      newQty = bn(remainsQty)
+        .plus(lineQty)
+        .toFixedDown(ei.precision.quantity)
+        .toString()
+    } else {
+      newQty = bn(lineQty)
+        .minus(remainsQty)
+        .toFixedDown(ei.precision.quantity)
+        .toString()
+    }
+
+    log.debug('newQty', newQty)
+
+    line[index.quantity] = newQty
+
+    line[index.cost] = bn(line[index.price])
+      .multipliedBy(line[index.quantity])
+      .toFixedDown(ei.precision.quote)
+      .toString()
+  }
+
+  // craft message
+
+  const details = [
     [`Current price`, `${currentPrice} ${quote}`],
     [`Min buy price`, `${min} ${quote}`],
     [`Max buy price`, `${max} ${quote}`],
     ['Spread width', `${spreadWidth} ${quote} (${spreadWidthPercent}%)`],
-    ['Buy Distance', `${buyDistance}% from current`],
-    [`Total to buy`, totalQuantity],
-    [
-      `Options`,
-      [
-        opts.iceberg ? `iceberg` : '',
-        opts.makerOnly ? 'maker only' : '',
-        opts.ascending ? `ascending` : '',
-        opts.descending ? `descending` : ''
-      ]
-        .filter(Boolean)
-        .join(', ')
-    ]
-  ])
+    ['Buy Distance', `${buyDistance}% from current`]
+  ]
 
   log.log()
-  log.log(info)
+  log.log(asTable(colorizeColumns(details)))
   log.log()
 
   // validate and add validation results to display
@@ -162,7 +238,9 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
 
     // calculate iceberg
     const iceburgQty = opts.iceberg
-      ? new BigNumber(quantity).multipliedBy(0.95).toFixedDown(ei.precision.quantity)
+      ? bn(quantity)
+          .multipliedBy(0.95)
+          .toFixedDown(ei.precision.quantity)
       : 0
 
     // test order
@@ -183,11 +261,30 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
     }
   })
 
-  const list = asTable([['#', 'Price', 'Quantity', 'Cost', ''], ...payload])
+  const list = asTable([['#', 'Price', 'Quantity', 'Cost', ''], ...addQuoteSuffix(payload, quote)])
 
   log.log(`ORDERS:`)
   log.log()
   log.log(list)
+  log.log()
+
+  const totalCost = payload.reduce((acc, curr) => {
+    return bn(acc).plus(curr[index.cost])
+  }, 0)
+
+  const percent = bn(totalCost)
+    .dividedBy(quoteBalance)
+    .times(100)
+    .toFixed(0)
+    .toString()
+
+  const corrected = [
+    [`${base} to buy`, `${quantity} ${base}`],
+    [`${quote} to spend`, `${totalCost} ${quote} (${percent}%)`]
+  ]
+
+  log.log()
+  log.log(asTable(colorizeColumns(corrected)))
   log.log()
 
   // execute prompt
@@ -195,10 +292,10 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
   let res = await prompts({
     type: 'confirm',
     name: 'correct',
-    message: 'Execute orders?'
+    message: 'Create orders?'
   })
 
-  // create orders
+  // create orderCount
 
   if (res.correct) {
     if (opts.cancelStops) {
@@ -208,7 +305,9 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
     await async.eachSeries(payload, async o => {
       // calculate iceberg
       const iceburgQty = opts.iceberg
-        ? new BigNumber(o[index.quantity]).multipliedBy(0.95).toFixedDown(ei.precision.quantity)
+        ? bn(o[index.quantity])
+            .multipliedBy(0.95)
+            .toFixedDown(ei.precision.quantity)
         : 0
 
       // create order
@@ -222,7 +321,64 @@ export default async function spreadBuy(base, quote, min, max, totalQuantity, or
         opts
       )
 
-      db.recordHistory({ order, res })
+      db.recordHistory({
+        order,
+        res
+      })
     })
+  }
+}
+
+async function calculateQuantity(quote, min, max, qtyType, qtyValue, ei, quoteBalance) {
+  if (qtyType === 'base') {
+    return {
+      quantity: qtyValue,
+      quoteToSpend: null
+    }
+  }
+
+  if (qtyType === 'quote') {
+    const quoteToSpend = qtyValue
+
+    const avgPrice = bn(max)
+      .plus(min)
+      .dividedBy(2)
+      .toString()
+
+    const quantity = bn(quoteToSpend)
+      .dividedBy(avgPrice)
+      .toFixed(ei.precision.quantity)
+      .toString()
+
+    return {
+      quantity,
+      quoteToSpend: bn(quoteToSpend)
+        .toFixed(ei.precision.quote)
+        .toString()
+    }
+  }
+
+  if (qtyType === 'percent') {
+    const quoteToSpend = bn(quoteBalance)
+      .multipliedBy(qtyValue)
+      .dividedBy(100)
+      .toString()
+
+    const avgPrice = bn(max)
+      .plus(min)
+      .dividedBy(2)
+      .toString()
+
+    const quantity = bn(quoteToSpend)
+      .dividedBy(avgPrice)
+      .toFixed(ei.precision.quantity)
+      .toString()
+
+    return {
+      quantity,
+      quoteToSpend: bn(quoteToSpend)
+        .toFixed(ei.precision.quote)
+        .toString()
+    }
   }
 }

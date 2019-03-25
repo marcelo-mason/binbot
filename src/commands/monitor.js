@@ -1,5 +1,5 @@
 import async from 'awaitable-async'
-import BigNumber from 'bignumber.js'
+import { bn } from '../util'
 
 import binance from '../binance'
 import db from '../db'
@@ -48,7 +48,7 @@ class Monitor {
 
     if (order.opts.deferPercentage) {
       let freeBalance = await binance.balance(order.base)
-      order.quantity = new BigNumber(freeBalance)
+      order.quantity = bn(freeBalance)
         .multipliedBy(order.percentage)
         .dividedBy(100)
         .toString()
