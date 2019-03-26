@@ -2,7 +2,7 @@
   "name": "binbot",
   "version": "1.0.0",
   "description": "Binance bot",
-  "license": "MIT",
+  "license": "ISC",
   "author": {
     "name": "phaedrus"
   },
@@ -15,6 +15,7 @@
     "start": "node src/binbot.js -r dotenv/config"
   },
   "dependencies": {
+    "ansi-escapes": "^4.0.1",
     "as-table": "^1.0.37",
     "awaitable-async": "0.0.6",
     "bignumber.js": "^8.1.1",
@@ -25,11 +26,11 @@
     "commander": "^2.19.0",
     "controlled-schedule": "^1.2.0",
     "dotenv": "^6.2.0",
+    "figures": "^2.0.0",
     "forever-monitor": "^1.7.1",
     "fuzzy": "^0.1.3",
     "idable": "^1.0.0",
     "inquirer": "^6.2.2",
-    "inquirer-autocomplete-prompt": "^1.0.1",
     "inquirer-checkbox-plus-prompt": "^1.0.1",
     "lodash": "^4.17.11",
     "lowdb": "^1.0.0",
@@ -37,6 +38,7 @@
     "npm": "^6.9.0",
     "path": "^0.12.7",
     "prompts": "^2.0.3",
+    "run-async": "^2.3.0",
     "rxjs": "^6.4.0",
     "winston": "^3.2.1"
   },

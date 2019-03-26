@@ -29,6 +29,8 @@ class Binance {
     }
 
     this.symbols = null
+
+    this.balances = null
   }
 
   async sync() {
@@ -67,6 +69,19 @@ class Binance {
       if (balance) {
         return balance.free
       }
+    } catch (e) {
+      log.error('Could not retreive account balances', e)
+      return false
+    }
+  }
+
+  async pullBalances() {
+    try {
+      const data = await async.retry(this.retryOpts, this.rest.account.bind(this.rest))
+      const hasMoney = data.balances.filter(x => {
+        return bn(x.free).gt(0)
+      })
+      this.balances = hasMoney
     } catch (e) {
       log.error('Could not retreive account balances', e)
       return false
@@ -273,8 +288,10 @@ class Binance {
   }
 
   async getMatchingPairs(input) {
-    input = input || ''
     return new Promise(async resolve => {
+      if (!input) {
+        resolve([])
+      }
       if (!this.symbols) {
         await this.exchangeInfo()
       }
@@ -283,6 +300,41 @@ class Binance {
       const matches = results.map(el => {
         return el.original
       })
+      resolve(matches)
+    })
+  }
+
+  async getSellablePairs() {
+    if (!this.balances) {
+      await this.pullBalances()
+    }
+    const sellable = this.balances.reduce(async (acc, curr) => {
+      if (!this.symbols) {
+        await this.exchangeInfo()
+      }
+      const matching = this.symbols
+        .map(x => x.symbol)
+        .filter(x => {
+          return x.startsWith(curr.asset)
+        })
+      const out = await acc
+      matching.forEach(x => {
+        if (!out.includes(x)) {
+          out.push(x)
+        }
+      })
+      return out
+    }, [])
+    return sellable
+  }
+
+  async getMatchingSellablePairs(input) {
+    return new Promise(async resolve => {
+      if (!input) {
+        resolve([])
+      }
+      const sellable = await this.getSellablePairs()
+      const matches = sellable.filter(x => x.startsWith(input))
       resolve(matches)
     })
   }

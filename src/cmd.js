@@ -3,7 +3,7 @@ import program from 'commander'
 import commands from './commands'
 import { log } from './logger'
 import ui from './ui'
-import inquire from './inquire'
+import asker from './asker'
 
 process.on('unhandledRejection', log.error)
 
@@ -29,7 +29,7 @@ program
       iceberg: program.iceberg || false,
       makerOnly: program.makerOnly || false
     }
-    commands.triggerbUY(base.toUpperCase(), quote.toUpperCase(), trigger, price, quantity, opts)
+    commands.triggerBuy(base.toUpperCase(), quote.toUpperCase(), trigger, price, quantity, opts)
   })
 
 program
@@ -116,6 +116,6 @@ program.on('--help', () => {
 program.parse(process.argv)
 if (!process.argv.slice(2).length) {
   ;(async function() {
-    await inquire.start()
+    await asker.start()
   })()
 }

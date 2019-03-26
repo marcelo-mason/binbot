@@ -13,7 +13,8 @@ class Db {
     this.db
       .defaults({
         orders: [],
-        history: []
+        inputHistory: [],
+        orderHistory: []
       })
       .write()
   }
@@ -89,20 +90,31 @@ class Db {
 
   recordHistory(obj) {
     this.db
-      .get('history')
+      .get('inputHistory')
       .push(obj)
       .write()
   }
 
-  getLatestHistory(ac) {
-    return this.db
-      .get('history')
-      .filter({
-        ac
-      })
+  recordOrderHistory(obj) {
+    this.db
+      .get('orderHistory')
+      .push(obj)
+      .write()
+  }
+
+  getLatestHistory(match) {
+    const matches = this.db
+      .get('inputHistory')
+      .filter(match)
       .sortBy('timestamp')
       .take(1)
       .value()
+
+    if (_.isEmpty(matches)) {
+      return null
+    }
+
+    return matches[0]
   }
 }
 

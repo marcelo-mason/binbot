@@ -4,6 +4,7 @@ import async from 'awaitable-async'
 import asTable from 'as-table'
 import idable from 'idable'
 import chalk from 'chalk'
+import Case from 'case'
 
 import db from '../db'
 import binance from '../binance'
@@ -18,7 +19,8 @@ const index = {
   validation: 4
 }
 
-export default async function spreadBuy(
+export default async function spread(
+  side,
   base,
   quote,
   min,
@@ -30,6 +32,7 @@ export default async function spreadBuy(
   opts
 ) {
   const pair = `${base}${quote}`
+  const isSell = side === 'SELL'
 
   const ei = await binance.getExchangeInfo(pair)
   if (!ei) {
@@ -37,6 +40,11 @@ export default async function spreadBuy(
   }
 
   const quoteBalance = bn(await binance.balance(quote))
+
+  const bal = await binance.balance(base)
+  let baseBalance = bn(bal)
+    .toFixedDown(ei.precision.quantity)
+    .toString()
 
   let currentPrice = await binance.tickerPrice(pair)
   if (!currentPrice) {
@@ -55,6 +63,7 @@ export default async function spreadBuy(
     .toString()
 
   // check for iceberg limitation
+
   if (!ei.icebergAllowed && opts.iceberg) {
     log.warn('Iceberg orderCount not allowed on this asset.')
     opts.iceberg = false
@@ -69,8 +78,13 @@ export default async function spreadBuy(
 
   // calculate distance / spread
 
-  const buyDistance = bn(currentPrice)
-    .minus(max)
+  const avgPrice = bn(max)
+    .plus(min)
+    .dividedBy(2)
+    .toString()
+
+  const distance = bn(currentPrice)
+    .minus(avgPrice)
     .dividedBy(currentPrice)
     .multipliedBy(100)
     .toFixed(2)
@@ -107,14 +121,10 @@ export default async function spreadBuy(
 
   // calculate quantities spreads
 
-  const { quantity, quoteToSpend } = await calculateQuantity(
-    min,
-    max,
-    qtyType,
-    qtyValue,
-    ei,
-    quoteBalance
-  )
+  const { quantity, quoteToSpend } = isSell
+    ? await calculateQuantityforSell(min, max, qtyType, qtyValue, ei, baseBalance)
+    : await calculateQuantityforBuy(min, max, qtyType, qtyValue, ei, quoteBalance)
+
   const multiples = _.range(2, orderCount * 2 + 2, 2)
   const portion = bn(quantity).dividedBy(orderCount)
   const unit = bn(portion)
@@ -129,18 +139,24 @@ export default async function spreadBuy(
         .toString()
     )
   )
-  if (dist === 'desc') {
-    quantities = quantities.reverse()
+  if (isSell) {
+    if (dist === 'asc') {
+      quantities = quantities.reverse()
+    }
+  } else {
+    if (dist === 'desc') {
+      quantities = quantities.reverse()
+    }
   }
   if (dist === 'equal') {
     quantities = Array(orderCount).fill(portion.toFixedDown(ei.precision.quantity).toString())
   }
 
-  // generate payload
+  // generate payload w/ prices and quantities
 
   const payload = _.zip(_.range(1, orderCount + 1), prices, quantities)
 
-  // calculate and add in costs
+  // add in costs
 
   payload.forEach(o => {
     o.push(
@@ -153,31 +169,32 @@ export default async function spreadBuy(
 
   // error correct payload quantities
 
-  if (qtyType === 'percent' || qtyType === 'quote') {
-    errorCorrectQuantities(payload, quoteToSpend, dist, ei)
-  }
+  errorCorrectQuantities(payload, quoteToSpend, dist, ei, isSell)
 
-  // add validation results to payload
+  // validate orders with binance
 
-  validatePayload(payload, pair, opts, ei)
+  const valid = await validateOrders(payload, pair, side, opts, ei)
 
-  // display data to user
+  // start data display
 
   const details = [
     [`Current price`, `${currentPrice} ${quote}`],
-    [`Min buy price`, `${min} ${quote}`],
-    [`Max buy price`, `${max} ${quote}`],
+    [`Min ${Case.lower(side)} price`, `${min} ${quote}`],
+    [`Max ${Case.lower(side)} price`, `${max} ${quote}`],
     ['Spread width', `${spreadWidth} ${quote} (${spreadWidthPercent}%)`],
-    ['Buy Distance', `${buyDistance}% from current`]
+    [`${Case.capital(side)} Distance`, `${distance}% from current`]
   ]
 
   log.log()
   log.log(asTable(colorizeColumns(details)))
   log.log()
 
-  const list = asTable([['#', 'Price', 'Quantity', 'Cost', ''], ...addQuoteSuffix(payload, quote)])
+  const list = asTable([
+    [chalk.whiteBright('#'), 'Price', 'Quantity', 'Cost', chalk.white(' ')],
+    ...addQuoteSuffix(payload, quote)
+  ])
 
-  log.log(`ORDERS:`)
+  log.log(`ORDERS`)
   log.log()
   log.log(list)
   log.log()
@@ -186,22 +203,45 @@ export default async function spreadBuy(
     return bn(acc).plus(curr[index.cost])
   }, 0)
 
-  const percent = bn(totalCost)
-    .dividedBy(quoteBalance)
-    .times(100)
-    .toFixed(0)
-    .toString()
+  let quoteTotal = `${totalCost} ${quote}`
+  if (!isSell) {
+    const percent = bn(totalCost)
+      .dividedBy(quoteBalance)
+      .times(100)
+      .toFixed(0)
+      .toString()
 
-  const corrected = [
-    [`${base} to buy`, `${quantity} ${base}`],
-    [`${quote} to spend`, `${totalCost} ${quote} (${percent}%)`]
+    quoteTotal += ` (${percent}%)`
+  }
+
+  const totals = [
+    [`${base} to ${Case.lower(side)}`, `${quantity} ${base}`],
+    [`${quote} to ${isSell ? 'receive' : 'spend'}`, quoteTotal]
   ]
 
+  const baseDisplay = bn(baseBalance)
+    .toFixedDown(ei.precision.base)
+    .toString()
+
+  const quoteDisplay = bn(quoteBalance)
+    .toFixedDown(ei.precision.quote)
+    .toString()
+
+  if (isSell) {
+    totals.unshift([`${base} balance`, `${baseDisplay} ${base}`])
+  } else {
+    totals.unshift([`${quote} balance`, `${quoteDisplay} ${quote}`])
+  }
+
   log.log()
-  log.log(asTable(colorizeColumns(corrected)))
+  log.log(asTable(colorizeColumns(totals)))
   log.log()
 
   // execute prompt
+
+  if (!valid) {
+    return
+  }
 
   let res = await prompts({
     type: 'confirm',
@@ -212,10 +252,6 @@ export default async function spreadBuy(
   // create orders
 
   if (res.correct) {
-    if (opts.cancelStops) {
-      await binance.cancelStops(pair)
-    }
-
     await async.eachSeries(payload, async o => {
       // calculate iceberg
       const iceburgQty = opts.iceberg
@@ -244,7 +280,7 @@ export default async function spreadBuy(
   }
 }
 
-async function calculateQuantity(min, max, qtyType, qtyValue, ei, quoteBalance) {
+async function calculateQuantityforBuy(min, max, qtyType, qtyValue, ei, quoteBalance) {
   if (qtyType === 'base') {
     return {
       quantity: qtyValue,
@@ -269,19 +305,67 @@ async function calculateQuantity(min, max, qtyType, qtyValue, ei, quoteBalance) 
 
     const quantity = bn(quoteToSpend)
       .dividedBy(avgPrice)
-      .toFixed(ei.precision.quantity)
+      .toFixedDown(ei.precision.quantity)
       .toString()
 
     return {
       quantity,
       quoteToSpend: bn(quoteToSpend)
-        .toFixed(ei.precision.quote)
+        .toFixedDown(ei.precision.quote)
         .toString()
     }
   }
 }
 
-function errorCorrectQuantities(payload, quoteToSpend, dist, ei) {
+async function calculateQuantityforSell(min, max, qtyType, qtyValue, ei, baseBalance) {
+  if (qtyType === 'base') {
+    return {
+      quantity: qtyValue,
+      quoteToSpend: null
+    }
+  }
+
+  if (qtyType === 'percent') {
+    const quantity = bn(baseBalance)
+      .multipliedBy(qtyValue)
+      .dividedBy(100)
+      .toFixedDown(ei.precision.quantity)
+      .toString()
+
+    return {
+      quantity,
+      quoteToSpend: null
+    }
+  }
+
+  if (qtyType === 'quote') {
+    let quoteToSpend = qtyValue
+
+    const avgPrice = bn(max)
+      .plus(min)
+      .dividedBy(2)
+      .toString()
+
+    const quantity = bn(quoteToSpend)
+      .dividedBy(avgPrice)
+      .toFixedDown(ei.precision.quantity)
+      .toString()
+
+    return {
+      quantity,
+      quoteToSpend: bn(quoteToSpend)
+        .toFixedDown(ei.precision.quote)
+        .toString()
+    }
+  }
+}
+
+// when calculating quantities based on a quote amount e.g. POLY quantity based off of BTC, an average base price is used (max+min)/2. once the order distribution is generated the final tally of the quote costs may differ from what was requested. this code adds or removes a certain amount of base quantity from the largest order to correct for this difference.
+function errorCorrectQuantities(payload, quoteToSpend, dist, ei, isSell) {
+  if (!quoteToSpend) {
+    return
+  }
+
   const totalCost = payload.reduce((acc, curr) => {
     return bn(acc).plus(curr[index.cost])
   }, 0)
@@ -291,10 +375,19 @@ function errorCorrectQuantities(payload, quoteToSpend, dist, ei) {
     .toString()
 
   let line, newQty
-  if (dist === 'asc') {
-    line = payload[payload.length - 1]
+
+  if (isSell) {
+    if (dist === 'desc') {
+      line = payload[payload.length - 1]
+    } else {
+      line = payload[0]
+    }
   } else {
-    line = payload[0]
+    if (dist === 'asc') {
+      line = payload[payload.length - 1]
+    } else {
+      line = payload[0]
+    }
   }
 
   const linePrice = line[index.price]
@@ -319,35 +412,34 @@ function errorCorrectQuantities(payload, quoteToSpend, dist, ei) {
     .toFixedDown(ei.precision.quote)
     .toString()
 
-  /*
-    log.debug('diff', diff)
-    log.debug('dist', dist)
-    log.debug('quantity', quoteToSpend)
-    log.debug('quoteToSpend', quoteToSpend)
-    log.debug('totalCost', totalCost.toString())
-    log.debug('linePrice', linePrice)
-    log.debug('lineQty', lineQty)
-    log.debug('remainsQty', remainsQty.toString())
-    log.debug('newQty', newQty)
-    */
+  log.debug('')
+  log.debug('diff', diff)
+  log.debug('dist', dist)
+  log.debug('quantity', quoteToSpend)
+  log.debug('quoteToSpend', quoteToSpend)
+  log.debug('totalCost', totalCost.toString())
+  log.debug('linePrice', linePrice)
+  log.debug('lineQty', lineQty)
+  log.debug('remainsQty', remainsQty.toString())
+  log.debug('newQty', newQty)
 }
 
-async function validatePayload(payload, pair, opts, ei) {
+async function validateOrders(payload, pair, side, opts, ei) {
+  let hasError = false
   await async.eachSeries(payload, async o => {
     const price = o[index.price]
     const quantity = o[index.quantity]
     let error = ''
 
+    if (!ei.validate.value(price, quantity)) {
+      error = `Cost too small, min = ${ei.notional.min} `
+    }
     if (!ei.validate.quantity(quantity)) {
-      error = `Quantity out of range (${ei.quantity.min}-${ei.quantity.max})`
+      error = `Quantity out of range ${ei.quantity.min}-${ei.quantity.max} `
     }
     if (!ei.validate.price(price)) {
-      error = `Price out of range (${ei.price.min}-${ei.price.max})`
+      error = `Price out of range ${ei.price.min}-${ei.price.max} `
     }
-    if (!ei.validate.value(price, quantity)) {
-      error = `Cost too small (min ${ei.notional.min})`
-    }
-
     // calculate iceberg
     const iceburgQty = opts.iceberg
       ? bn(quantity)
@@ -355,21 +447,28 @@ async function validatePayload(payload, pair, opts, ei) {
           .toFixedDown(ei.precision.quantity)
       : 0
 
-    // test order
-    const res = await binance.testOrder(
-      pair,
-      'BUY',
-      idable(8, false),
-      quantity,
-      iceburgQty,
-      price,
-      opts
-    )
-
-    if (res.success) {
-      o[index.validation] = `${chalk.bold.green('good ✔')}`
+    if (error) {
+      o[index.validation] = `${chalk.bold.red('✖')} ${chalk.bold.red(error)}`
+      hasError = true
     } else {
-      o[index.validation] = `${chalk.bold.red('failed ✖')} ${chalk.red(error || res.msg)}`
+      // test order
+      const res = await binance.testOrder(
+        pair,
+        side,
+        idable(8, false),
+        quantity,
+        iceburgQty,
+        price,
+        opts
+      )
+
+      if (res.success) {
+        o[index.validation] = `${chalk.bold.green('✔')}`
+      } else {
+        o[index.validation] = `${chalk.bold.red('✖')} ${chalk.bold.red(res.msg)}`
+        hasError = true
+      }
     }
   })
+  return !hasError
 }

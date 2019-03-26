@@ -1,7 +1,6 @@
-import triggerbUY from './triggerbUY'
+import triggerBuy from './triggerBuy'
 import triggerSell from './triggerSell'
-import spreadBuy from './spreadBuy'
-import spreadSell from './spreadSell'
+import spread from './spread'
 import monitor from './monitor'
 
-export default { triggerbUY, triggerSell, spreadBuy, spreadSell, monitor }
+export default { triggerBuy, triggerSell, spread, monitor }
