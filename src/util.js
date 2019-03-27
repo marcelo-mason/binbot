@@ -5,6 +5,14 @@ BigNumber.prototype.toFixedDown = function(precision) {
   return this.toFixed(precision, BigNumber.ROUND_DOWN)
 }
 
+BigNumber.prototype.fix = function(precision) {
+  return this.toFixedDown(precision).toString()
+}
+
+export function fix(num, precision) {
+  return bn(num).fix(precision)
+}
+
 export function bn(num) {
   return new BigNumber(num)
 }

@@ -1,9 +1,8 @@
 import async from 'awaitable-async'
-import { bn } from '../util'
 
 import binance from '../binance'
 import db from '../db'
-import { log } from '../logger'
+import spread from './spread'
 import ui from '../ui'
 
 class Monitor {
@@ -23,62 +22,15 @@ class Monitor {
         db.updateState(ticker)
         ui.update(grouped)
 
-        async.each(orders, order => {
-          const above = order.direction === '>' && ticker.currentClose >= order.trigger
-          const below = order.direction === '<' && ticker.currentClose <= order.trigger
+        await async.eachSeries(orders, async order => {
+          const above = order.data.direction === '>' && ticker.currentClose >= order.trigger
+          const below = order.data.direction === '<' && ticker.currentClose <= order.trigger
           if (above || below) {
-            if (order.side === 'SELL') {
-              this.triggerSell(order)
-              log.sellTriggered(order, ticker)
-            }
-            if (order.side === 'BUY') {
-              this.triggerBuy(order)
-              log.buyTriggered(order, ticker)
-            }
+            await spread.execute(order.payload, order.data)
           }
         })
       })
     })
-  }
-
-  async triggerSell(order) {
-    if (order.opts.cancelStops) {
-      await binance.cancelStops(order.pair)
-    }
-
-    if (order.opts.deferPercentage) {
-      let freeBalance = await binance.balance(order.base)
-      order.quantity = bn(freeBalance)
-        .multipliedBy(order.percentage)
-        .dividedBy(100)
-        .toString()
-
-      log.deferredCalculation(order, freeBalance)
-    }
-
-    await binance.createOrder(
-      order.pair,
-      order.side,
-      order.id,
-      order.quantity,
-      order.price,
-      order.opts
-    )
-  }
-
-  async triggerBuy(order) {
-    if (order.opts.cancelStops) {
-      await binance.cancelStops(order.pair)
-    }
-
-    await binance.createOrder(
-      order.pair,
-      order.side,
-      order.id,
-      order.quantity,
-      order.price,
-      order.opts
-    )
   }
 }
 

@@ -1,11 +1,11 @@
 import inquirer from 'inquirer'
 import { Subject } from 'rxjs'
-import { log } from '../logger'
 
+import { log } from '../logger'
+import binance from '../binance'
 import spreadBuy from './spreadBuy'
 import spreadSell from './spreadSell'
-// import triggerSell from './triggerSell'
-// import triggerBuy from './triggerBuy'
+import { fix } from '../util'
 
 const action = {
   type: 'list',
@@ -19,19 +19,22 @@ const action = {
     {
       name: 'Spread Sell',
       value: 'ss'
-    },
-    {
-      name: 'Trigger Buy',
-      value: 'tb'
-    },
-    {
-      name: 'Trigger Sell',
-      value: 'ts'
     }
   ]
 }
 
 const prompts = new Subject()
+
+async function getPairInfo(pair) {
+  const info = {}
+  info.ei = await binance.getExchangeInfo(pair)
+  info.balances = {
+    quote: fix(await binance.balance(info.ei.quote), info.ei.precision.quote),
+    base: fix(await binance.balance(info.ei.base), info.ei.precision.quantity)
+  }
+  info.currentPrice = fix(await binance.tickerPrice(pair), info.ei.precision.price)
+  return info
+}
 
 class Inquire {
   async init() {
@@ -40,8 +43,16 @@ class Inquire {
     inquirer.registerPrompt('checkbox-plus', require('inquirer-checkbox-plus-prompt'))
     const prompt = inquirer.prompt(prompts)
     prompt.ui.process.subscribe(this.onEachAnswer, log.error)
+
     prompt.then(async answers => {
-      await this.execute(answers)
+      switch (answers.ac) {
+        case 'sb':
+          await spreadBuy.execute(answers)
+          break
+        case 'ss':
+          await spreadSell.execute(answers)
+          break
+      }
     })
   }
 
@@ -66,53 +77,27 @@ class Inquire {
     // ask next question
     switch (command) {
       case 'sb':
+        if (spreadBuy.isFirstQuestion(next)) {
+          const info = await getPairInfo(o.answer)
+          spreadBuy.setPairInfo(info)
+        }
         if (!spreadBuy.isLastQuestion(next)) {
-          prompts.next(await spreadBuy.questions[next](o.answer))
+          prompts.next(await spreadBuy.getQuestion(next, o.answer))
         } else {
           prompts.complete()
         }
         break
       case 'ss':
+        if (spreadSell.isFirstQuestion(next)) {
+          const info = await getPairInfo(o.answer)
+          spreadSell.setPairInfo(info)
+        }
         if (spreadSell.isLastQuestion(next)) {
           prompts.complete()
           return
         }
-        prompts.next(await spreadSell.questions[next](o.answer))
+        prompts.next(await spreadSell.getQuestion(next, o.answer))
         break
-      /*
-      case 'tb':
-        if (triggerBuy.isLastQuestion(next)) {
-          prompts.complete()
-          return
-        }
-        prompts.next(await triggerBuy.questions[next](o.answer))
-        break
-      case 'ts':
-        if (triggerSell.isLastQuestion(next)) {
-          prompts.complete()
-          return
-        }
-        prompts.next(await triggerSell.questions[next](o.answer))
-        break 
-      */
-    }
-  }
-
-  async execute(answers) {
-    switch (answers.ac) {
-      case 'sb':
-        await spreadBuy.execute(answers)
-        break
-      case 'ss':
-        await spreadSell.execute(answers)
-      /*
-      case 'tb':
-        await triggerBuy.execute(answers)
-        break
-      case 'ts':
-        await triggerSell.execute(answers)
-        break
-      */
     }
   }
 }

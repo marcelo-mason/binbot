@@ -28,7 +28,6 @@
     "dotenv": "^6.2.0",
     "figures": "^2.0.0",
     "forever-monitor": "^1.7.1",
-    "fuzzy": "^0.1.3",
     "idable": "^1.0.0",
     "inquirer": "^6.2.2",
     "inquirer-checkbox-plus-prompt": "^1.0.1",

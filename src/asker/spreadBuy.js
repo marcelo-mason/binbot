@@ -2,12 +2,13 @@ import chalk from 'chalk'
 
 import db from '../db'
 import binance from '../binance'
-import commands from '../commands'
-import { bn, timestamp } from '../util'
+import spread from '../commands/spread'
+import { bn, timestamp, fix } from '../util'
 
 class SpreadBuy {
   constructor() {
-    this.ei = null
+    this.info = null
+    this.answers = {}
 
     this.questions = [
       async prev => {
@@ -17,6 +18,7 @@ class SpreadBuy {
           pageSize: '4',
           message: 'Which a pair are you trading?',
           source: async (answers, input) => {
+            this.answers = answers
             return new Promise(async resolve => {
               const matching = await binance.getMatchingPairs(input)
               const latest = db.getLatestHistory(answers)
@@ -29,21 +31,17 @@ class SpreadBuy {
         }
       },
       async prev => {
-        this.ei = await binance.getExchangeInfo(prev)
-        const currentPrice = bn(await binance.tickerPrice(prev))
-          .toFixedDown(this.ei.precision.price)
-          .toString()
-
         return {
           type: 'input-plus',
           name: 'sb_1',
-          message: `Whats the min price?`,
           default: answers => {
+            this.answers = answers
             const latest = db.getLatestHistory(answers)
-            return latest ? latest['sb_1'] : currentPrice
+            return latest ? latest['sb_1'] : 10
           },
+          message: 'How many orders to set?',
           validate: answer => {
-            return !isNaN(answer) && bn(answer).gt(0) && bn(answer).lt(currentPrice)
+            return !isNaN(answer) && bn(answer).gt(0)
           }
         }
       },
@@ -51,10 +49,30 @@ class SpreadBuy {
         return {
           type: 'input-plus',
           name: 'sb_2',
+          message: `Whats the min price?`,
+          when: () => prev > 1,
+          default: answers => {
+            this.answers = answers
+            const latest = db.getLatestHistory(answers)
+            return latest ? latest['sb_2'] : this.info.currentPrice
+          },
+          validate: answer => {
+            return !isNaN(answer) && bn(answer).gt(0) && bn(answer).lt(this.info.currentPrice)
+          }
+        }
+      },
+      async prev => {
+        return {
+          type: 'input-plus',
+          name: 'sb_3',
+          when: () => {
+            return !!this.answers['sb_2']
+          },
           message: `Whats the max price?`,
           default: answers => {
+            this.answers = answers
             const latest = db.getLatestHistory(answers)
-            return latest ? latest['sb_2'] : answers['sb_1']
+            return latest ? latest['sb_3'] : answers['sb_2']
           },
           validate: answer => {
             return !isNaN(answer) && bn(answer).gt(0) && bn(answer).gt(prev)
@@ -64,46 +82,44 @@ class SpreadBuy {
       async prev => {
         return {
           type: 'list',
-          name: 'sb_3',
+          name: 'sb_4',
           message: 'How to supply the amount to buy?',
           default: answers => {
+            this.answers = answers
             const latest = db.getLatestHistory(answers)
             if (latest) {
-              return latest['sb_3']
+              return latest['sb_4']
             }
           },
           choices: [
             {
-              name: `Percent of ${this.ei.quote}`,
+              name: `Percent of ${this.info.ei.quote}`,
               value: 'percent'
             },
             {
-              name: `Amount of ${this.ei.quote}`,
+              name: `Amount of ${this.info.ei.quote}`,
               value: 'quote'
             },
             {
-              name: `Amount of ${this.ei.base}`,
+              name: `Amount of ${this.info.ei.base}`,
               value: 'base'
             }
           ]
         }
       },
       async prev => {
-        const quoteBalance = bn(await binance.balance(this.ei.quote))
-          .toFixedDown(this.ei.precision.quote)
-          .toString()
-
         if (prev === 'percent') {
           return {
             type: 'input-plus',
-            name: 'sb_4',
+            name: 'sb_5',
             default: answers => {
+              this.answers = answers
               const latest = db.getLatestHistory(answers)
-              return latest ? latest['sb_4'] : 100
+              return latest ? latest['sb_5'] : 100
             },
-            message: `What percentage of your ${chalk.yellow(quoteBalance)} ${chalk.yellow(
-              this.ei.quote
-            )} would you like to spend?`,
+            message: `What percentage of your ${chalk.yellow(
+              this.info.balances.quote
+            )} ${chalk.yellow(this.info.ei.quote)} would you like to spend?`,
             validate: answer => {
               return !isNaN(answer) && bn(answer).gt(0)
             }
@@ -112,14 +128,15 @@ class SpreadBuy {
         if (prev === 'base') {
           return {
             type: 'input-plus',
-            name: 'sb_4',
+            name: 'sb_5',
             default: answers => {
+              this.answers = answers
               const latest = db.getLatestHistory(answers)
               if (latest) {
-                return latest['sb_4']
+                return latest['sb_5']
               }
             },
-            message: `How many ${this.ei.base} would you like to buy?`,
+            message: `How many ${this.info.ei.base} would you like to buy?`,
             validate: answer => {
               return !isNaN(answer) && bn(answer).gt(0)
             }
@@ -128,36 +145,23 @@ class SpreadBuy {
         if (prev === 'quote') {
           return {
             type: 'autocomplete',
-            name: 'sb_4',
-            message: `How many ${this.ei.quote} would you like to spend?`,
+            name: 'sb_5',
+            message: `How many ${this.info.ei.quote} would you like to spend?`,
             suggestOnly: true,
             source: async answers => {
+              this.answers = answers
               return new Promise(async resolve => {
                 const latest = db.getLatestHistory(answers)
                 if (latest) {
-                  resolve([latest['sb_4'] || quoteBalance])
+                  resolve([latest['sb_5'] || this.info.balances.quote])
                   return
                 }
-                resolve([quoteBalance])
+                resolve([this.info.balances.quote])
               })
             },
             validate: answer => {
-              return !isNaN(answer) && bn(answer).gt(0)
+              return !isNaN(answer) && bn(answer).gt(0) && bn(answer).lte(this.info.balances.quote)
             }
-          }
-        }
-      },
-      async prev => {
-        return {
-          type: 'input-plus',
-          name: 'sb_5',
-          default: answers => {
-            const latest = db.getLatestHistory(answers)
-            return latest ? latest['sb_5'] : 10
-          },
-          message: 'How many orders to make?',
-          validate: answer => {
-            return !isNaN(answer) && bn(answer).gt(0)
           }
         }
       },
@@ -166,6 +170,7 @@ class SpreadBuy {
           type: 'list',
           name: 'sb_6',
           default: answers => {
+            this.answers = answers
             const latest = db.getLatestHistory(answers)
             if (latest) {
               return latest['sb_6']
@@ -194,6 +199,7 @@ class SpreadBuy {
           name: 'sb_7',
           message: `Order properties`,
           default: answers => {
+            this.answers = answers
             const latest = db.getLatestHistory(answers)
             if (latest) {
               return latest['sb_7']
@@ -218,16 +224,35 @@ class SpreadBuy {
     ]
   }
 
-  isLastQuestion(page) {
-    return this.questions.length === page
+  setPairInfo(info) {
+    this.info = info
   }
 
-  parseAnswers(answers) {
+  isFirstQuestion(num) {
+    return num === 1
+  }
+
+  isLastQuestion(num) {
+    return this.questions.length === num
+  }
+
+  async getQuestion(num, answer) {
+    let next = await this.questions[num](answer)
+    while ('when' in next && !next.when() && num < this.questions.length) {
+      next = await this.questions[++num](answer)
+    }
+    return next
+  }
+
+  parseAnswers(answers, info) {
     return {
-      base: this.ei.base,
-      quote: this.ei.quote,
-      min: answers['sb_1'],
-      max: answers['sb_2'],
+      side: 'BUY',
+      isSell: false,
+      base: this.info.ei.base,
+      quote: this.info.ei.quote,
+      pair: `${this.info.ei.base}${this.info.ei.quote}`,
+      min: fix(answers['sb_1'], this.info.ei.precision.price),
+      max: fix(answers['sb_2'], this.info.ei.precision.price),
       qtyType: answers['sb_3'],
       qtyValue: answers['sb_4'],
       orderCount: answers['sb_5'],
@@ -248,18 +273,7 @@ class SpreadBuy {
       opts: data.opts
     })
 
-    await commands.spread(
-      'BUY',
-      data.base,
-      data.quote,
-      data.min,
-      data.max,
-      data.qtyType,
-      data.qtyValue,
-      data.dist,
-      data.orderCount,
-      data.opts
-    )
+    await spread.start(data)
   }
 }
 

@@ -36,30 +36,5 @@ export const log = {
   error: (...args) => {
     console.log(chalk.red(args[0]), ...args.slice(1))
     logger.error(...args)
-  },
-  sellTriggered: (order, ticker) => {
-    logger.info(
-      'order triggered',
-      `p:${order.base}${order.quote} t:${order.direction}${order.trigger} p:${order.price} q:${
-        order.percentage
-      }%`
-    )
-    logger.verbose(ticker)
-  },
-  buyTriggered: (order, ticker) => {
-    logger.info(
-      'order triggered',
-      `p:${order.base}${order.quote} t:${order.direction}${order.trigger} p:${order.price} q:${
-        order.quantity
-      }%`
-    )
-    logger.verbose(ticker)
-  },
-  deferredCalculation: (order, freeBalance) => {
-    logger.info(
-      `Calculating deferred percentage: ${order.percentage}% of ${freeBalance} ${order.base} = ${
-        order.quantity
-      }`
-    )
   }
 }

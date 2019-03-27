@@ -3,7 +3,6 @@ import { BinanceWS, BinanceRest } from 'binance'
 import moment from 'moment'
 import async from 'awaitable-async'
 import _ from 'lodash'
-import fuzzy from 'fuzzy'
 
 import { bn } from './util'
 import { log } from './logger'
@@ -29,8 +28,9 @@ class Binance {
     }
 
     this.symbols = null
-
     this.balances = null
+
+    this.exchangeInfo()
   }
 
   async sync() {
@@ -79,7 +79,7 @@ class Binance {
     try {
       const data = await async.retry(this.retryOpts, this.rest.account.bind(this.rest))
       const hasMoney = data.balances.filter(x => {
-        return bn(x.free).gt(0)
+        return bn(x.free).gt(0) || bn(x.locked).gt(0)
       })
       this.balances = hasMoney
     } catch (e) {
@@ -138,7 +138,7 @@ class Binance {
   }
 
   async createOrder(pair, side, id, quantity, icebergQty, price, opts) {
-    const order = {
+    const ticket = {
       newClientOrderId: id,
       symbol: pair,
       side,
@@ -148,13 +148,13 @@ class Binance {
       icebergQty: icebergQty || 0
     }
     if (!opts.makerOnly) {
-      order.timeInForce = 'GTC'
+      ticket.timeInForce = 'GTC'
     }
     try {
-      const res = await this.rest.newOrder(order)
+      const result = await this.rest.newOrder(ticket)
       return {
-        order,
-        res
+        ticket,
+        result
       }
     } catch (e) {
       log.error(e.msg)
@@ -291,15 +291,13 @@ class Binance {
     return new Promise(async resolve => {
       if (!input) {
         resolve([])
+        return
       }
       if (!this.symbols) {
         await this.exchangeInfo()
       }
       const symbolList = this.symbols.map(x => x.symbol)
-      const results = fuzzy.filter(input, symbolList)
-      const matches = results.map(el => {
-        return el.original
-      })
+      const matches = symbolList.filter(x => x.startsWith(input.toUpperCase()))
       resolve(matches)
     })
   }
@@ -332,9 +330,10 @@ class Binance {
     return new Promise(async resolve => {
       if (!input) {
         resolve([])
+        return
       }
       const sellable = await this.getSellablePairs()
-      const matches = sellable.filter(x => x.startsWith(input))
+      const matches = sellable.filter(x => x.startsWith(input.toUpperCase()))
       resolve(matches)
     })
   }

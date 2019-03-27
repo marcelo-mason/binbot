@@ -1,5 +1,4 @@
 import low from 'lowdb'
-import idable from 'idable'
 import FileSync from 'lowdb/adapters/FileSync'
 import _ from 'lodash'
 
@@ -19,22 +18,13 @@ class Db {
       .write()
   }
 
-  addOrder(base, quote, side, trigger, direction, price, quantity, percentage, state, opts) {
+  addOrder(payload, data) {
     this.db
       .get('orders')
       .push({
-        id: idable(8, false),
-        base,
-        quote,
-        pair: `${base}${quote}`,
-        side,
-        trigger,
-        direction,
-        price,
-        quantity,
-        percentage,
-        opts,
-        state
+        pair: data.pair,
+        payload,
+        data
       })
       .write()
   }
