@@ -433,15 +433,25 @@ class LimitCommand {
       quoteTotal += ` (${percent}%)`
     }
 
-    const totals = [
-      [`${data.base} to ${Case.lower(data.side)}`, `${quantity} ${data.base}`],
-      [`${data.quote} to ${data.isSell ? 'receive' : 'spend'}`, quoteTotal]
-    ]
+    const totals = []
 
     if (data.isSell) {
-      totals.unshift([`${data.base} balance`, `${balances.base} ${data.base}`])
+      totals.push([`${data.base} balance`, `${balances.base} ${data.base}`])
+      const percent = bn(quantity)
+        .dividedBy(balances.base)
+        .toFixed(2)
+      totals.push([
+        `${data.base} to ${Case.lower(data.side)}`,
+        `${quantity} ${data.base} (${percent}%)`
+      ])
+      totals.push([`${data.quote} to receive`, quoteTotal])
     } else {
       totals.push([`${data.quote} balance`, `${balances.quote} ${data.quote}`])
+      const percent = bn(quoteTotal)
+        .dividedBy(balances.quote)
+        .toFixed(2)
+      totals.push([`${data.quote} to spend (${percent}%)`, quoteTotal])
+      totals.push([`${data.base} to ${Case.lower(data.side)}`, `${quantity} ${data.base}`])
     }
 
     log.log()
