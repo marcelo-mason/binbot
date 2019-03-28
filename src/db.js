@@ -97,6 +97,7 @@ class Db {
       .get('inputHistory')
       .filter(match)
       .sortBy('timestamp')
+      .reverse()
       .take(1)
       .value()
 

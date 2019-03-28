@@ -3,8 +3,7 @@ import { Subject } from 'rxjs'
 
 import { log } from '../logger'
 import binance from '../binance'
-import spreadBuy from './spreadBuy'
-import spreadSell from './spreadSell'
+import limit from './limit'
 import { fix } from '../util'
 
 const action = {
@@ -13,20 +12,22 @@ const action = {
   message: 'Which action?',
   choices: [
     {
-      name: 'Spread Buy',
-      value: 'sb'
+      name: 'Limit Buy',
+      value: 'limit_BUY'
     },
     {
-      name: 'Spread Sell',
-      value: 'ss'
+      name: 'Limit Sell',
+      value: 'limit_SELL'
     }
   ]
 }
 
 const prompts = new Subject()
 
-async function getPairInfo(pair) {
+async function getPairInfo(pair, side) {
   const info = {}
+  info.side = side
+  info.isSell = side === 'SELL'
   info.ei = await binance.getExchangeInfo(pair)
   info.balances = {
     quote: fix(await binance.balance(info.ei.quote), info.ei.precision.quote),
@@ -37,6 +38,9 @@ async function getPairInfo(pair) {
 }
 
 class Inquire {
+  constructor() {
+    this.side = null
+  }
   async init() {
     inquirer.registerPrompt('input-plus', require('./addons/input'))
     inquirer.registerPrompt('autocomplete', require('./addons/autocomplete'))
@@ -45,12 +49,10 @@ class Inquire {
     prompt.ui.process.subscribe(this.onEachAnswer, log.error)
 
     prompt.then(async answers => {
-      switch (answers.ac) {
-        case 'sb':
-          await spreadBuy.execute(answers)
-          break
-        case 'ss':
-          await spreadSell.execute(answers)
+      const [command] = answers.ac.split('_')
+      switch (command) {
+        case 'limit':
+          await limit.execute(answers)
           break
       }
     })
@@ -68,7 +70,7 @@ class Inquire {
 
     // handle action choice
     if (command === 'ac') {
-      command = o.answer
+      ;[command, this.side] = o.answer.split('_')
       question = -1
     }
 
@@ -76,27 +78,16 @@ class Inquire {
 
     // ask next question
     switch (command) {
-      case 'sb':
-        if (spreadBuy.isFirstQuestion(next)) {
-          const info = await getPairInfo(o.answer)
-          spreadBuy.setPairInfo(info)
+      case 'limit':
+        if (limit.isFirstQuestion(next)) {
+          const info = await getPairInfo(o.answer, this.side)
+          limit.setPairInfo(info)
         }
-        if (!spreadBuy.isLastQuestion(next)) {
-          prompts.next(await spreadBuy.getQuestion(next, o.answer))
-        } else {
-          prompts.complete()
-        }
-        break
-      case 'ss':
-        if (spreadSell.isFirstQuestion(next)) {
-          const info = await getPairInfo(o.answer)
-          spreadSell.setPairInfo(info)
-        }
-        if (spreadSell.isLastQuestion(next)) {
+        if (limit.isLastQuestion(next)) {
           prompts.complete()
           return
         }
-        prompts.next(await spreadSell.getQuestion(next, o.answer))
+        prompts.next(await limit.getQuestion(next, o.answer))
         break
     }
   }

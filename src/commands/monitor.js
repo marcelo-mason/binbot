@@ -2,7 +2,7 @@ import async from 'awaitable-async'
 
 import binance from '../binance'
 import db from '../db'
-import spread from './spread'
+import limit from './limit'
 import ui from '../ui'
 
 class Monitor {
@@ -23,10 +23,10 @@ class Monitor {
         ui.update(grouped)
 
         await async.eachSeries(orders, async order => {
-          const above = order.data.direction === '>' && ticker.currentClose >= order.trigger
-          const below = order.data.direction === '<' && ticker.currentClose <= order.trigger
+          const above = order.data.direction === '>' && ticker.currentClose >= order.data.trigger
+          const below = order.data.direction === '<' && ticker.currentClose <= order.data.trigger
           if (above || below) {
-            await spread.execute(order.payload, order.data)
+            await limit.execute(order.payload, order.data)
           }
         })
       })

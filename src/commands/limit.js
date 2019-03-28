@@ -19,7 +19,7 @@ const index = {
   validation: 4
 }
 
-class Spread {
+class LimitCommand {
   constructor() {
     this.ei = null
   }
@@ -39,93 +39,79 @@ class Spread {
     }
 
     // check for iceberg limitation
+
     if (!this.ei.icebergAllowed && data.opts.iceberg) {
       log.warn('Iceberg orderCount not allowed on this asset.')
       data.opts.iceberg = false
     }
 
-    // default order to 10 orderCount
-    data.orderCount = parseInt(data.orderCount) || 10
-    if (data.orderCount < 2) {
-      log.error('<orderCount> must be > 1')
-      return
-    }
-
-    const direction = data.trigger < currentPrice ? '<' : '>'
-
-    // calculate distance / spread
-
-    const avgPrice = bn(data.max)
-      .plus(data.min)
-      .dividedBy(2)
-      .toString()
-
-    const distance = bn(currentPrice)
-      .minus(avgPrice)
-      .dividedBy(currentPrice)
-      .multipliedBy(100)
-      .toFixed(2)
-      .toString()
-
-    const spreadWidth = bn(data.max)
-      .minus(data.min)
-      .fix(this.ei.precision.price)
-
-    const spreadWidthPercent = bn(spreadWidth)
-      .dividedBy(data.max)
-      .absoluteValue()
-      .toFixed(2)
-
-    const spreadDistance = bn(spreadWidth)
-      .dividedBy(data.orderCount - 1)
-      .toString()
-
-    // calculate price distribution
-
-    const prices = _.range(data.orderCount)
-      .map(n => {
-        const distance = bn(spreadDistance)
-          .multipliedBy(n)
-          .toString()
-        return bn(data.min)
-          .plus(distance)
-          .fix(this.ei.precision.price)
-      })
-      .reverse()
-
-    // calculate quantity distribution
+    // calculate quantity for sale
 
     const { quantity, quoteToSpend } = data.isSell
       ? await this.calculateQuantityforSell(balances, data)
       : await this.calculateQuantityforBuy(balances, data)
 
-    const multiples = _.range(2, data.orderCount * 2 + 2, 2)
-    const portion = bn(quantity).dividedBy(data.orderCount)
-    const unit = bn(portion)
-      .dividedBy(data.orderCount + 1)
-      .toString()
+    let payload
 
-    let quantities = multiples.map(r =>
-      parseFloat(
-        bn(r)
-          .multipliedBy(unit)
-          .fix(this.ei.precision.quantity)
+    if (data.isSpread) {
+      // calculate spread
+
+      const spreadWidth = bn(data.max)
+        .minus(data.min)
+        .fix(this.ei.precision.price)
+
+      const spreadDistance = bn(spreadWidth)
+        .dividedBy(data.orderCount - 1)
+        .toString()
+
+      // calculate price distribution
+
+      const prices = _.range(data.orderCount)
+        .map(n => {
+          const distance = bn(spreadDistance)
+            .multipliedBy(n)
+            .toString()
+          return bn(data.min)
+            .plus(distance)
+            .fix(this.ei.precision.price)
+        })
+        .reverse()
+      const multiples = _.range(2, data.orderCount * 2 + 2, 2)
+      const portion = bn(quantity).dividedBy(data.orderCount)
+      const unit = bn(portion)
+        .dividedBy(data.orderCount + 1)
+        .toString()
+
+      let quantities = multiples.map(r =>
+        parseFloat(
+          bn(r)
+            .multipliedBy(unit)
+            .fix(this.ei.precision.quantity)
+        )
       )
-    )
-    if (data.isSell) {
-      if (data.dist === 'asc') {
-        quantities = quantities.reverse()
+      if (data.isSell) {
+        if (data.dist === 'asc') {
+          quantities = quantities.reverse()
+        }
+      } else {
+        if (data.dist === 'desc') {
+          quantities = quantities.reverse()
+        }
       }
-    } else {
-      if (data.dist === 'desc') {
-        quantities = quantities.reverse()
+      if (data.dist === 'equal') {
+        quantities = Array(data.orderCount).fill(portion.fix(this.ei.precision.quantity))
       }
-    }
-    if (data.dist === 'equal') {
-      quantities = Array(data.orderCount).fill(portion.fix(this.ei.precision.quantity))
-    }
 
-    const payload = _.zip(_.range(1, data.orderCount + 1), prices, quantities)
+      payload = _.zip(_.range(1, data.orderCount + 1), prices, quantities)
+
+      // error correct payload quantities
+
+      this.errorCorrectQuantities(payload, quoteToSpend, data)
+    } else {
+      // if no spread create a one order payload
+
+      payload = [[1, data.price, quantity]]
+    }
 
     // calculate costs
 
@@ -136,96 +122,18 @@ class Spread {
           .fix(this.ei.precision.quote)
       )
     })
-
-    // error correct payload quantities
-
-    this.errorCorrectQuantities(payload, quoteToSpend, data)
-
     // validate orders with binance
 
     const valid = await this.validateOrders(payload, data)
-
     // start data display
 
-    const details = [
-      [`Current price`, `${currentPrice} ${data.quote}`],
-      ['Spread width', `${spreadWidth} ${data.quote} (${spreadWidthPercent}%)`],
-      [`${Case.capital(data.side)} Distance`, `${distance}% from current`]
-    ]
-
-    if (data.spread) {
-      details.push([`Min ${Case.lower(data.side)} price`, `${data.min} ${data.quote}`])
-
-      details.push([`Max ${Case.lower(data.side)} price`, `${data.max} ${data.quote}`])
-    }
-
-    if (data.trigger) {
-      const triggerDistance = bn(currentPrice)
-        .minus(data.trigger)
-        .absoluteValue()
-        .dividedBy(currentPrice)
-        .multipliedBy(100)
-        .toFixed(2)
-        .toString()
-
-      details.push([`Trigger distance`, `${triggerDistance}% from current`])
-    }
-
-    log.log()
-    log.log(asTable(colorizeColumns(details)))
-    log.log()
-
-    // display orders
-
-    log.log(`ORDERS`)
-    log.log()
-    log.log(
-      asTable([
-        [chalk.whiteBright('#'), 'Price', 'Quantity', 'Cost', chalk.white(' ')],
-        ...addQuoteSuffix(payload, data.quote)
-      ])
-    )
-    log.log()
-
-    const totalCost = payload.reduce((acc, curr) => {
-      return bn(acc).plus(curr[index.cost])
-    }, 0)
-
-    // display totals
-
-    let quoteTotal = `${totalCost} ${data.quote}`
-    if (!data.isSell) {
-      const percent = bn(totalCost)
-        .dividedBy(balances.quote)
-        .times(100)
-        .toFixed(0)
-        .toString()
-
-      quoteTotal += ` (${percent}%)`
-    }
-
-    const totals = [
-      [`${data.base} to ${Case.lower(data.side)}`, `${quantity} ${data.base}`],
-      [`${data.quote} to ${data.isSell ? 'recthis.eive' : 'spend'}`, quoteTotal]
-    ]
-
-    if (data.isSell) {
-      totals.unshift([`${data.base} balance`, `${balances.base} ${data.base}`])
-    } else {
-      totals.push([`${data.quote} balance`, `${balances.quote} ${data.quote}`])
-    }
-
-    log.log()
-    log.log(asTable(colorizeColumns(totals)))
-    log.log()
-
-    // display prompt
+    this.displayData(data, payload, balances, quantity, currentPrice)
 
     if (!valid) {
       return
     }
 
-    if (data.trigger) {
+    if (data.isLater) {
       let res = await prompts({
         type: 'confirm',
         name: 'correct',
@@ -243,9 +151,116 @@ class Spread {
       })
 
       if (res.correct) {
-        this.execute(payload, data)
+        this.create(payload, data)
       }
     }
+  }
+
+  async displayData(data, payload, balances, quantity, currentPrice) {
+    const display = [[`Current price`, `${currentPrice} ${data.quote}`]]
+
+    if (data.isSpread) {
+      const spreadWidth = bn(data.max)
+        .minus(data.min)
+        .fix(this.ei.precision.price)
+
+      const spreadWidthPercent = bn(spreadWidth)
+        .dividedBy(data.max)
+        .absoluteValue()
+        .toFixed(2)
+
+      const avgPrice = bn(data.max)
+        .plus(data.min)
+        .dividedBy(2)
+        .toString()
+
+      let distance = bn(currentPrice)
+        .minus(avgPrice)
+        .dividedBy(currentPrice)
+        .multipliedBy(100)
+        .toFixed(2)
+        .toString()
+
+      if (data.isSell) {
+        distance = bn(avgPrice)
+          .minus(currentPrice)
+          .dividedBy(avgPrice)
+          .multipliedBy(100)
+          .toFixed(2)
+          .toString()
+      }
+
+      display.push([
+        `${Case.capital(data.side)} price range`,
+        `${data.min} - ${data.max} ${data.quote} (${spreadWidthPercent}%)`
+      ])
+      display.push([`${Case.capital(data.side)} distance`, `${distance}% from current`])
+    } else {
+      const distance = bn(data.price)
+        .minus(currentPrice)
+        .absoluteValue()
+        .toString()
+
+      display.push([`${Case.capital(data.side)} price`, `${data.price} ${data.quote}`])
+      display.push([`${Case.capital(data.side)} Distance`, `${distance}% from current`])
+    }
+
+    if (data.isLater) {
+      const triggerDistance = bn(currentPrice)
+        .minus(data.trigger)
+        .absoluteValue()
+        .dividedBy(currentPrice)
+        .multipliedBy(100)
+        .toFixed(2)
+        .toString()
+
+      display.push([`Trigger price`, `${data.trigger} ${data.quote}`])
+      display.push([`Trigger distance`, `${triggerDistance}% from current`])
+    }
+
+    log.log()
+    log.log(asTable(colorizeColumns(display)))
+    log.log()
+
+    const orderTable = [
+      [chalk.whiteBright('#'), 'Price', 'Quantity', 'Cost', chalk.white(' ')],
+      ...addQuoteSuffix(payload, data.quote)
+    ]
+    log.log(`ORDERS`)
+    log.log()
+    log.log(asTable(orderTable))
+    log.log()
+
+    const totalCost = payload.reduce((acc, curr) => {
+      return bn(acc).plus(curr[index.cost])
+    }, 0)
+
+    let quoteTotal = `${totalCost} ${data.quote}`
+
+    if (!data.isSell) {
+      const percent = bn(totalCost)
+        .dividedBy(balances.quote)
+        .times(100)
+        .toFixed(0)
+        .toString()
+
+      quoteTotal += ` (${percent}%)`
+    }
+
+    const totals = [
+      [`${data.base} to ${Case.lower(data.side)}`, `${quantity} ${data.base}`],
+      [`${data.quote} to ${data.isSell ? 'receive' : 'spend'}`, quoteTotal]
+    ]
+
+    if (data.isSell) {
+      totals.unshift([`${data.base} balance`, `${balances.base} ${data.base}`])
+    } else {
+      totals.push([`${data.quote} balance`, `${balances.quote} ${data.quote}`])
+    }
+
+    log.log()
+    log.log(asTable(colorizeColumns(totals)))
+    log.log()
   }
 
   async calculateQuantityforBuy(balances, data) {
@@ -432,7 +447,7 @@ class Spread {
     return !hasError
   }
 
-  async execute(payload, data) {
+  async create(payload, data) {
     await async.eachSeries(payload, async o => {
       // calculate iceberg
       const iceburgQty = data.opts.iceberg
@@ -444,7 +459,7 @@ class Spread {
       // create order
       const { ticket, result } = await binance.createOrder(
         data.pair,
-        'BUY',
+        data.side,
         idable(8, false),
         o[index.quantity],
         iceburgQty,
@@ -461,4 +476,4 @@ class Spread {
   }
 }
 
-export default new Spread()
+export default new LimitCommand()

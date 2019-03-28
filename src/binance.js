@@ -158,6 +158,11 @@ class Binance {
       }
     } catch (e) {
       log.error(e.msg)
+      console.log(ticket)
+      return {
+        ticket,
+        result: e
+      }
     }
   }
 
