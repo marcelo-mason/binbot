@@ -58,7 +58,7 @@ class LimitCommand {
     // or a multi-order spread payload
 
     if (data.isSpread) {
-      payload = await this.calculateSpreadPayload(payload, quantity)
+      payload = await this.calculateSpreadPayload(quantity, data)
       this.errorCorrectQuantities(payload, quoteToSpend, data)
     }
 
@@ -72,7 +72,7 @@ class LimitCommand {
       )
     })
 
-    // validate orders with binance
+    // validate payload with binance
 
     const valid = await this.validateOrders(payload, data)
 
@@ -179,7 +179,7 @@ class LimitCommand {
     }
   }
 
-  async calculateSpreadPayload(data, quantity) {
+  async calculateSpreadPayload(quantity, data) {
     // calculate spread
 
     const spreadWidth = bn(data.max)

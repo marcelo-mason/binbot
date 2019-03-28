@@ -377,7 +377,7 @@ class LimitAsker {
     return {
       side: this.info.side,
       isSell: this.info.isSell,
-      isSpread: answers['limit_1'] > 1,
+      isSpread: parseInt(answers['limit_1']) > 1,
       isLater: answers['limit_4'] === 'later',
       base: this.info.ei.base,
       quote: this.info.ei.quote,
