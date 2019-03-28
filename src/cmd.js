@@ -3,7 +3,7 @@ import program from 'commander'
 import monitor from './commands/monitor'
 import { log } from './logger'
 import ui from './ui'
-import inquire from './asker/inquire'
+import asker from './asker'
 
 process.on('unhandledRejection', log.error)
 
@@ -24,6 +24,6 @@ program
 program.parse(process.argv)
 if (!process.argv.slice(2).length) {
   ;(async function() {
-    await inquire.start()
+    await asker.start()
   })()
 }
