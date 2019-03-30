@@ -53,24 +53,23 @@ class LimitCommand {
 
     // create a one order payload
 
-    let payload = [[1, data.price, quantity]]
+    let payload = [
+      [
+        1,
+        data.price,
+        quantity,
+        bn(data.price)
+          .multipliedBy(quantity)
+          .fix(this.ei.precision.quote)
+      ]
+    ]
 
     // or a multi-order spread payload
 
     if (data.isSpread) {
       payload = await this.calculateSpreadPayload(quantity, data)
-      this.errorCorrectQuantities(payload, quoteToSpend, data)
+      this.errorCorrectQuantities(payload, quoteToSpend, quantity)
     }
-
-    // calculate costs
-
-    payload.forEach(o => {
-      o.push(
-        bn(o[index.price])
-          .multipliedBy(o[index.quantity])
-          .fix(this.ei.precision.quote)
-      )
-    })
 
     // validate payload with binance
 
@@ -106,6 +105,7 @@ class LimitCommand {
       }
     }
   }
+
   async calculateQuantityforBuy(balances, data) {
     if (data.qtyType === 'base') {
       return {
@@ -202,95 +202,118 @@ class LimitCommand {
           .fix(this.ei.precision.price)
       })
       .reverse()
-    const multiples = _.range(2, data.orderCount * 2 + 2, 2)
+
+    let payload
     const portion = bn(quantity).dividedBy(data.orderCount)
-    const unit = bn(portion)
+    const shard = bn(portion)
       .dividedBy(data.orderCount + 1)
       .toString()
 
-    let quantities = multiples.map(r =>
-      parseFloat(
-        bn(r)
-          .multipliedBy(unit)
-          .fix(this.ei.precision.quantity)
+    if (data.dist === 'asc' || data.dist === 'desc') {
+      const multiples = _.range(2, data.orderCount * 2 + 2, 2)
+      let quantities = multiples.map(multiple =>
+        parseFloat(
+          bn(multiple)
+            .multipliedBy(shard)
+            .fix(this.ei.precision.quantity)
+        )
       )
-    )
-    if (data.isSell) {
-      if (data.dist === 'asc') {
-        quantities = quantities.reverse()
+      if (data.isSell) {
+        if (data.dist === 'asc') {
+          quantities = quantities.reverse()
+        }
+      } else {
+        if (data.dist === 'desc') {
+          quantities = quantities.reverse()
+        }
       }
-    } else {
-      if (data.dist === 'desc') {
-        quantities = quantities.reverse()
-      }
-    }
-    if (data.dist === 'equal') {
-      quantities = Array(data.orderCount).fill(portion.fix(this.ei.precision.quantity))
+
+      payload = _.zip(_.range(1, data.orderCount + 1), prices, quantities)
     }
 
-    return _.zip(_.range(1, data.orderCount + 1), prices, quantities)
+    if (data.dist === 'equal') {
+      let quantities = Array(data.orderCount).fill(portion.fix(this.ei.precision.quantity))
+
+      payload = _.zip(_.range(1, data.orderCount + 1), prices, quantities)
+
+      const quoteTotal = payload.reduce((acc, curr) => {
+        return bn(curr[index.price])
+          .multipliedBy(curr[index.quantity])
+          .plus(acc)
+          .toString()
+      }, 0)
+
+      const quotePortion = bn(quoteTotal).dividedBy(data.orderCount)
+
+      payload.forEach(o => {
+        o[index.quantity] = bn(quotePortion)
+          .dividedBy(o[index.price])
+          .fix(this.ei.precision.quantity)
+      })
+    }
+
+    // calculate costs
+
+    payload.forEach(o => {
+      o.push(
+        bn(o[index.price])
+          .multipliedBy(o[index.quantity])
+          .fix(this.ei.precision.quote)
+      )
+    })
+
+    return payload
   }
 
-  // when calculating quantities based on a quote amount e.g. POLY quantity based off of BTC, an average base price is used (max+min)/2. once the order distribution is generated the final tally of the quote costs may differ from what was requested. this code adds or removes a certain amount of base quantity from the largest order to correct for this difference.
-  errorCorrectQuantities(payload, quoteToSpend, data) {
-    if (!quoteToSpend) {
-      return
-    }
-
-    const totalCost = payload.reduce((acc, curr) => {
-      return bn(acc).plus(curr[index.cost])
-    }, 0)
-
-    const diff = bn(quoteToSpend)
-      .minus(totalCost)
-      .toString()
-
-    let line, newQty
-
-    if (data.isSell) {
-      if (data.dist === 'desc') {
-        line = payload[payload.length - 1]
-      } else {
-        line = payload[0]
-      }
-    } else {
-      if (data.dist === 'asc') {
-        line = payload[payload.length - 1]
-      } else {
-        line = payload[0]
-      }
-    }
-
+  // when calculating quantities based on a quote amount e.g. POLY quantity based off of BTC, an average base price is used (max+min)/2. once the order distribution is generated the final tally of the quote costs may differ from what was requested. this code adds or removes a certain amount of base quantity from the middle order to correct for this difference.
+  errorCorrectQuantities(payload, quoteToSpend, quantity) {
+    const line = payload[parseInt(payload.length / 2) - 1]
     const linePrice = line[index.price]
     const lineQty = line[index.quantity]
-    const remainsQty = bn(bn(diff).absoluteValue()).dividedBy(linePrice)
 
-    if (diff > 0) {
-      newQty = bn(remainsQty)
-        .plus(lineQty)
-        .fix(this.ei.precision.quantity)
+    if (quoteToSpend) {
+      const totalCost = payload.reduce((acc, curr) => {
+        return bn(acc).plus(curr[index.cost])
+      }, 0)
+
+      const diff = bn(quoteToSpend)
+        .minus(totalCost)
+        .toString()
+
+      const remainsQty = bn(bn(diff).absoluteValue()).dividedBy(linePrice)
+
+      if (diff > 0) {
+        line[index.quantity] = bn(remainsQty)
+          .plus(lineQty)
+          .fix(this.ei.precision.quantity)
+      } else {
+        line[index.quantity] = bn(lineQty)
+          .minus(remainsQty)
+          .fix(this.ei.precision.quantity)
+      }
+
+      line[index.cost] = bn(line[index.price])
+        .multipliedBy(line[index.quantity])
+        .fix(this.ei.precision.quote)
     } else {
-      newQty = bn(lineQty)
-        .minus(remainsQty)
-        .fix(this.ei.precision.quantity)
-    }
-    line[index.quantity] = newQty
+      const totalQuantity = payload.reduce((acc, curr) => {
+        return bn(acc).plus(curr[index.quantity])
+      }, 0)
 
-    line[index.cost] = bn(line[index.price])
-      .multipliedBy(line[index.quantity])
-      .fix(this.ei.precision.quote)
-    /*
-    log.debug('')
-    log.debug('diff', diff)
-    log.debug('dist', data.dist)
-    log.debug('quantity', quoteToSpend)
-    log.debug('quoteToSpend', quoteToSpend)
-    log.debug('totalCost', totalCost.toString())
-    log.debug('linePrice', linePrice)
-    log.debug('lineQty', lineQty)
-    log.debug('remainsQty', remainsQty.toString())
-    log.debug('newQty', newQty)
-    */
+      const diff = bn(quantity)
+        .minus(totalQuantity)
+        .toString()
+
+      if (diff < 0 || diff > 0) {
+        line[index.quantity] = bn(lineQty)
+          .plus(diff)
+          .fix(this.ei.precision.quantity)
+
+        line[index.cost] = bn(line[index.price])
+          .multipliedBy(line[index.quantity])
+          .fix(this.ei.precision.quote)
+      }
+    }
   }
 
   async validateOrders(payload, data) {
@@ -352,8 +375,9 @@ class LimitCommand {
 
       const spreadWidthPercent = bn(spreadWidth)
         .dividedBy(data.max)
+        .multipliedBy(100)
         .absoluteValue()
-        .toFixed(2)
+        .toFixed(0)
 
       const avgPrice = bn(data.max)
         .plus(data.min)
@@ -388,7 +412,7 @@ class LimitCommand {
         .toString()
 
       display.push([`${Case.capital(data.side)} price`, `${data.price} ${data.quote}`])
-      display.push([`${Case.capital(data.side)} Distance`, `${distance}% from current`])
+      display.push([`${Case.capital(data.side)} distance`, `${distance}% from current`])
     }
 
     if (data.isLater) {
@@ -421,36 +445,34 @@ class LimitCommand {
       return bn(acc).plus(curr[index.cost])
     }, 0)
 
+    const totalQuantity = payload.reduce((acc, curr) => {
+      return bn(acc).plus(curr[index.quantity])
+    }, 0)
+
     let quoteTotal = `${totalCost} ${data.quote}`
-
-    if (!data.isSell) {
-      const percent = bn(totalCost)
-        .dividedBy(balances.quote)
-        .times(100)
-        .toFixed(0)
-        .toString()
-
-      quoteTotal += ` (${percent}%)`
-    }
 
     const totals = []
 
     if (data.isSell) {
-      totals.push([`${data.base} balance`, `${balances.base} ${data.base}`])
-      const percent = bn(quantity)
+      const percent = bn(totalQuantity)
         .dividedBy(balances.base)
-        .toFixed(2)
+        .times(100)
+        .toFixed(0)
+
+      totals.push([`${data.base} balance`, `${balances.base} ${data.base}`])
       totals.push([
         `${data.base} to ${Case.lower(data.side)}`,
-        `${quantity} ${data.base} (${percent}%)`
+        `${totalQuantity} ${data.base} (${percent}%)`
       ])
       totals.push([`${data.quote} to receive`, quoteTotal])
     } else {
-      totals.push([`${data.quote} balance`, `${balances.quote} ${data.quote}`])
-      const percent = bn(quoteTotal)
+      const percent = bn(totalCost)
         .dividedBy(balances.quote)
-        .toFixed(2)
-      totals.push([`${data.quote} to spend (${percent}%)`, quoteTotal])
+        .times(100)
+        .toFixed(0)
+
+      totals.push([`${data.quote} balance`, `${balances.quote} ${data.quote}`])
+      totals.push([`${data.quote} to spend`, `${quoteTotal} (${percent}%)`])
       totals.push([`${data.base} to ${Case.lower(data.side)}`, `${quantity} ${data.base}`])
     }
 

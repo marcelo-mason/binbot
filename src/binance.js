@@ -222,8 +222,8 @@ class Binance {
     const notional = _.find(found.filters, { filterType: 'MIN_NOTIONAL' })
 
     const validator = (value, min, max, step) => {
-      const minRule = value >= min
-      const maxRule = value <= max
+      const minRule = bn(value).gte(min)
+      const maxRule = bn(value).lte(max)
       const tickRule =
         bn(value)
           .minus(min)
