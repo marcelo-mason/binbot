@@ -60,13 +60,18 @@ class Binance {
     }
   }
 
-  async balance(asset) {
+  async balance(asset, includeLocked) {
     try {
       const data = await async.retry(this.retryOpts, this.rest.account.bind(this.rest))
       const balance = _.find(data.balances, {
         asset
       })
       if (balance) {
+        if (includeLocked) {
+          return bn(balance.free)
+            .plus(balance.locked)
+            .toString()
+        }
         return balance.free
       }
     } catch (e) {
@@ -220,6 +225,7 @@ class Binance {
     const lotSize = _.find(found.filters, { filterType: 'LOT_SIZE' })
     const priceFilter = _.find(found.filters, { filterType: 'PRICE_FILTER' })
     const notional = _.find(found.filters, { filterType: 'MIN_NOTIONAL' })
+    const icebergParts = _.find(found.filters, { filterType: 'ICEBERG_PARTS' })
 
     const validator = (value, min, max, step) => {
       const minRule = bn(value).gte(min)
@@ -245,7 +251,19 @@ class Binance {
     const obj = {
       base: found.baseAsset,
       quote: found.quoteAsset,
-      icebergAllowed: found.icebergAllowed,
+      iceberg: {
+        allowed: found.icebergAllowed,
+        qty: quantity => {
+          if (!icebergParts || !icebergParts.limit) {
+            return 0
+          }
+          const limit = icebergParts.limit
+          return bn(quantity)
+            .dividedBy(limit - 1)
+            .toFixedDown(toPrecision(lotSize.stepSize))
+            .toString()
+        }
+      },
       maxAlgoOrders: mnao.maxNumAlgoOrders,
       precision: {
         base: found.baseAssetPrecision,

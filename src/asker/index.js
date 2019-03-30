@@ -4,7 +4,7 @@ import { Subject } from 'rxjs'
 import { log } from '../logger'
 import binance from '../binance'
 import limit from './limit'
-import { fix } from '../util'
+import { fix, bn } from '../util'
 
 const action = {
   type: 'list',
@@ -34,6 +34,16 @@ async function getPairInfo(pair, side) {
     base: fix(await binance.balance(info.ei.base), info.ei.precision.quantity)
   }
   info.currentPrice = fix(await binance.tickerPrice(pair), info.ei.precision.price)
+
+  // figure in the base quantity locked in stops
+
+  const stops = await binance.getOpenStops(pair)
+  if (stops) {
+    info.balances.base = bn(info.balances.base)
+      .plus(stops.totalQuantity)
+      .fix(info.ei.precision.quantity)
+  }
+
   return info
 }
 

@@ -37,12 +37,12 @@ class LimitAsker {
         return {
           type: 'input-plus',
           name,
+          message: 'How many orders to set?',
           default: answers => {
             this.answers = answers
             const latest = db.getLatestHistory(answers)
             return latest ? latest[name] : 1
           },
-          message: 'How many orders to set?',
           validate: answer => {
             return !isNaN(answer) && bn(answer).gt(0)
           }
@@ -69,10 +69,10 @@ class LimitAsker {
         return {
           type: 'input-plus',
           name,
+          message: `Whats the max price?`,
           when: () => {
             return this.answers['limit_1'] > 1
           },
-          message: `Whats the max price?`,
           default: answers => {
             this.answers = answers
             const latest = db.getLatestHistory(answers)
@@ -113,10 +113,10 @@ class LimitAsker {
         return {
           type: 'input-plus',
           name,
+          message: `What price will trigger the order(s)?`,
           when: () => {
             return this.answers['limit_4'] === 'later'
           },
-          message: `What price will trigger the order(s)?`,
           default: answers => {
             this.answers = answers
             const latest = db.getLatestHistory(answers)
@@ -181,14 +181,14 @@ class LimitAsker {
             return {
               type: 'input-plus',
               name,
+              message: `What percentage of your ${this.info.balances.base} ${
+                this.info.ei.base
+              } would you like to sell?`,
               default: answers => {
                 this.answers = answers
                 const latest = db.getLatestHistory(answers)
                 return latest ? latest[name] : 100
               },
-              message: `What percentage of your ${this.info.balances.base} ${
-                this.info.ei.base
-              } would you like to sell?`,
               validate: answer => {
                 return !isNaN(answer) && bn(answer).gt(0)
               }
@@ -198,6 +198,9 @@ class LimitAsker {
             return {
               type: 'input-plus',
               name,
+              message: `How many of your ${chalk.yellow(this.info.balances.base)} ${chalk.yellow(
+                this.info.ei.base
+              )} would you like to sell?`,
               default: answers => {
                 this.answers = answers
                 const latest = db.getLatestHistory(answers)
@@ -205,9 +208,6 @@ class LimitAsker {
                   return latest[name]
                 }
               },
-              message: `How many of your ${chalk.yellow(this.info.balances.base)} ${chalk.yellow(
-                this.info.ei.base
-              )} would you like to sell?`,
               validate: answer => {
                 return !isNaN(answer) && bn(answer).gt(0) && bn(answer).lte(this.info.balances.base)
               }
@@ -236,14 +236,14 @@ class LimitAsker {
             return {
               type: 'input-plus',
               name,
+              message: `What percentage of your ${chalk.yellow(
+                this.info.balances.quote
+              )} ${chalk.yellow(this.info.ei.quote)} would you like to spend?`,
               default: answers => {
                 this.answers = answers
                 const latest = db.getLatestHistory(answers)
                 return latest ? latest[name] : 100
               },
-              message: `What percentage of your ${chalk.yellow(
-                this.info.balances.quote
-              )} ${chalk.yellow(this.info.ei.quote)} would you like to spend?`,
               validate: answer => {
                 return !isNaN(answer) && bn(answer).gt(0)
               }
@@ -253,6 +253,7 @@ class LimitAsker {
             return {
               type: 'input-plus',
               name,
+              message: `How many ${this.info.ei.base} would you like to buy?`,
               default: answers => {
                 this.answers = answers
                 const latest = db.getLatestHistory(answers)
@@ -260,7 +261,6 @@ class LimitAsker {
                   return latest[name]
                 }
               },
-              message: `How many ${this.info.ei.base} would you like to buy?`,
               validate: answer => {
                 return !isNaN(answer) && bn(answer).gt(0)
               }
@@ -297,13 +297,6 @@ class LimitAsker {
         return {
           type: 'list',
           name,
-          default: answers => {
-            this.answers = answers
-            const latest = db.getLatestHistory(answers)
-            if (latest) {
-              return latest[name]
-            }
-          },
           message: 'How should the amounts be distributed?',
           choices: [
             {
@@ -318,7 +311,17 @@ class LimitAsker {
               name: `Equal`,
               value: 'equal'
             }
-          ]
+          ],
+          when: () => {
+            return this.answers['limit_1'] > 1
+          },
+          default: answers => {
+            this.answers = answers
+            const latest = db.getLatestHistory(answers)
+            if (latest) {
+              return latest[name]
+            }
+          }
         }
       },
       async prev => {
@@ -338,12 +341,16 @@ class LimitAsker {
             return new Promise(async resolve => {
               resolve([
                 {
-                  name: `Iceberg Order - 95% hidden`,
+                  name: `Iceberg Order - Hides ~90% of the quantity  from ui`,
                   value: 'iceberg'
                 },
                 {
                   name: `Maker Only - Order rejected if matches as a taker`,
                   value: 'makerOnly'
+                },
+                {
+                  name: `Cancel Stops - Cancel stops before creating orders`,
+                  value: 'cancelStops'
                 }
               ])
             })

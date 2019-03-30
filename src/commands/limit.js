@@ -38,9 +38,20 @@ class LimitCommand {
       return
     }
 
+    // figure in the base quantity locked in stops
+
+    if (data.opts.cancelStops) {
+      const stops = await binance.getOpenStops(data.pair)
+      if (stops) {
+        balances.base = bn(balances.base)
+          .plus(stops.totalQuantity)
+          .fix(this.ei.precision.quantity)
+      }
+    }
+
     // check for iceberg limitation
 
-    if (!this.ei.icebergAllowed && data.opts.iceberg) {
+    if (!this.ei.iceberg.allowed && data.opts.iceberg) {
       log.warn('Iceberg orderCount not allowed on this asset.')
       data.opts.iceberg = false
     }
@@ -71,7 +82,7 @@ class LimitCommand {
       this.errorCorrectQuantities(payload, quoteToSpend, quantity)
     }
 
-    // validate payload with binance
+    // validate payload
 
     const valid = await this.validateOrders(payload, data)
 
@@ -124,10 +135,12 @@ class LimitCommand {
           .toString()
       }
 
-      const avgPrice = bn(data.max)
-        .plus(data.min)
-        .dividedBy(2)
-        .toString()
+      const avgPrice = data.isSpread
+        ? bn(data.max)
+            .plus(data.min)
+            .dividedBy(2)
+            .toString()
+        : data.min
 
       const quantity = bn(quoteToSpend)
         .dividedBy(avgPrice)
@@ -163,10 +176,12 @@ class LimitCommand {
     if (data.qtyType === 'quote') {
       let quoteToSpend = data.qtyValue
 
-      const avgPrice = bn(data.max)
-        .plus(data.min)
-        .dividedBy(2)
-        .toString()
+      const avgPrice = data.isSpread
+        ? bn(data.max)
+            .plus(data.min)
+            .dividedBy(2)
+            .toString()
+        : data.min
 
       const quantity = bn(quoteToSpend)
         .dividedBy(avgPrice)
@@ -332,24 +347,24 @@ class LimitCommand {
       if (!this.ei.validate.price(price)) {
         error = `Price out of range ${this.ei.price.min}-${this.ei.price.max} `
       }
-      // calculate iceberg
-      const iceburgQty = data.opts.iceberg
-        ? bn(quantity)
-            .multipliedBy(0.95)
-            .toFixedDown(this.ei.precision.quantity)
-        : 0
+      if (data.opts.iceberg) {
+        if (!this.ei.validate.price(price)) {
+          error = `Price out of range ${this.ei.price.min}-${this.ei.price.max} `
+        }
+      }
 
       if (error) {
         o[index.validation] = `${chalk.bold.red('✖')} ${chalk.bold.red(error)}`
         hasError = true
       } else {
+        /*
         // test order
         const res = await binance.testOrder(
           data.pair,
           data.side,
           idable(8, false),
           quantity,
-          iceburgQty,
+          this.ie.iceberg.qty(quantity),
           price,
           data.opts
         )
@@ -359,7 +374,7 @@ class LimitCommand {
         } else {
           o[index.validation] = `${chalk.bold.red('✖')} ${chalk.bold.red(res.msg)}`
           hasError = true
-        }
+        } */
       }
     })
     return !hasError
@@ -379,10 +394,12 @@ class LimitCommand {
         .absoluteValue()
         .toFixed(0)
 
-      const avgPrice = bn(data.max)
-        .plus(data.min)
-        .dividedBy(2)
-        .toString()
+      const avgPrice = data.isSpread
+        ? bn(data.max)
+            .plus(data.min)
+            .dividedBy(2)
+            .toString()
+        : data.min
 
       let distance = bn(currentPrice)
         .minus(avgPrice)
@@ -441,13 +458,19 @@ class LimitCommand {
     log.log(asTable(orderTable))
     log.log()
 
-    const totalCost = payload.reduce((acc, curr) => {
-      return bn(acc).plus(curr[index.cost])
-    }, 0)
+    const totalCost = fix(
+      payload.reduce((acc, curr) => {
+        return bn(acc).plus(curr[index.cost])
+      }, 0),
+      this.ei.precision.quote
+    )
 
-    const totalQuantity = payload.reduce((acc, curr) => {
-      return bn(acc).plus(curr[index.quantity])
-    }, 0)
+    const totalQuantity = fix(
+      payload.reduce((acc, curr) => {
+        return bn(acc).plus(curr[index.quantity])
+      }, 0),
+      this.ei.precision.quantity
+    )
 
     let quoteTotal = `${totalCost} ${data.quote}`
 
@@ -482,21 +505,18 @@ class LimitCommand {
   }
 
   async create(payload, data) {
-    await async.eachSeries(payload, async o => {
-      // calculate iceberg
-      const iceburgQty = data.opts.iceberg
-        ? bn(o[index.quantity])
-            .multipliedBy(0.95)
-            .toFixedDown(this.ei.precision.quantity)
-        : 0
+    if (data.opts.cancelStops) {
+      await binance.cancelStops(data.pair)
+    }
 
+    await async.eachSeries(payload, async o => {
       // create order
       const { ticket, result } = await binance.createOrder(
         data.pair,
         data.side,
         idable(8, false),
         o[index.quantity],
-        iceburgQty,
+        this.ei.iceberg.qty(o[index.quantity]),
         o[index.price],
         data.opts
       )
