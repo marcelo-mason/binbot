@@ -423,9 +423,11 @@ class LimitCommand {
       ])
       display.push([`${Case.capital(data.side)} distance`, `${distance}% from current`])
     } else {
-      const distance = bn(data.price)
-        .minus(currentPrice)
-        .absoluteValue()
+      const distance = bn(currentPrice)
+        .minus(data.price)
+        .dividedBy(currentPrice)
+        .multipliedBy(100)
+        .toFixed(2)
         .toString()
 
       display.push([`${Case.capital(data.side)} price`, `${data.price} ${data.quote}`])
