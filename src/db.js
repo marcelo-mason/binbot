@@ -107,6 +107,22 @@ class Db {
 
     return matches[0]
   }
+
+  getLatestPairs(key) {
+    const matches = this.db
+      .get('inputHistory')
+      .uniqBy(key)
+      .sortBy('timestamp')
+      .reverse()
+      .map(key)
+      .take(4)
+      .value()
+
+    if (_.isEmpty(matches)) {
+      return null
+    }
+    return matches
+  }
 }
 
 export default new Db()

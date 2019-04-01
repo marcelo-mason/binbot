@@ -4,7 +4,6 @@ class UI {
   constructor() {
     this.isInit = false
     this.index = {
-      id: 0,
       pair: 1,
       side: 2,
       price: 3,
@@ -13,16 +12,13 @@ class UI {
       currentPrice: 6,
       distance: 7
     }
-    this.titles = [
-      ['Id', 'Pair', 'Side', 'Price', 'Quantity', 'Trigger Price', 'Current Price', 'Distance']
-    ]
+    this.titles = [['Side', 'Pair', 'Quantity', 'Price', 'Trigger', 'Current Price', 'Distance']]
     this.formatOrder = order => {
       return [
-        order.id,
-        order.pair,
         order.side,
-        order.price,
+        order.pair,
         order.quantity === 'tbd' ? `${order.percentage}%` : order.quantity,
+        order.price,
         order.trigger,
         order.state.currentPrice,
         order.state.distance

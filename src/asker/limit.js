@@ -23,9 +23,10 @@ class LimitAsker {
             this.answers = answers
             return new Promise(async resolve => {
               const matching = await binance.getMatchingPairs(input)
-              const latest = db.getLatestHistory(answers)
-              if (!input && latest) {
-                matching.unshift(latest[name])
+              if (!input) {
+                const latestPairs = db.getLatestPairs(name)
+                resolve(latestPairs)
+                return
               }
               resolve(matching)
             })
@@ -181,9 +182,9 @@ class LimitAsker {
             return {
               type: 'input-plus',
               name,
-              message: `What percentage of your ${this.info.balances.base} ${
-                this.info.ei.base
-              } would you like to sell?`,
+              message: `What percentage of your ${chalk.yellow(
+                this.info.balances.base
+              )} ${chalk.yellow(this.info.ei.base)} would you like to sell?`,
               default: answers => {
                 this.answers = answers
                 const latest = db.getLatestHistory(answers)
@@ -300,16 +301,16 @@ class LimitAsker {
           message: 'How should the amounts be distributed?',
           choices: [
             {
+              name: `Equal`,
+              value: 'equal'
+            },
+            {
               name: `Ascending`,
               value: 'asc'
             },
             {
               name: `Descending`,
               value: 'desc'
-            },
-            {
-              name: `Equal`,
-              value: 'equal'
             }
           ],
           when: () => {
@@ -341,7 +342,7 @@ class LimitAsker {
             return new Promise(async resolve => {
               resolve([
                 {
-                  name: `Iceberg Order - Hides ~90% of the quantity  from ui`,
+                  name: `Iceberg Order - Hides 90% of the quantity`,
                   value: 'iceberg'
                 },
                 {

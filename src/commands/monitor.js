@@ -16,7 +16,7 @@ class Monitor {
 
   async listen() {
     const grouped = await db.getOrdersGroupedByPair()
-
+    console.log(grouped)
     await async.each(grouped, async ({ pair, orders }) => {
       await binance.ws.onTicker(pair, async ticker => {
         db.updateState(ticker)
@@ -26,7 +26,7 @@ class Monitor {
           const above = order.data.direction === '>' && ticker.currentClose >= order.data.trigger
           const below = order.data.direction === '<' && ticker.currentClose <= order.data.trigger
           if (above || below) {
-            await limit.execute(order.payload, order.data)
+            await limit.create(order.payload, order.data)
           }
         })
       })
