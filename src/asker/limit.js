@@ -343,7 +343,8 @@ class LimitAsker {
               resolve([
                 {
                   name: `Iceberg Order - Hides 90% of the quantity`,
-                  value: 'iceberg'
+                  value: 'iceberg',
+                  checked: true
                 },
                 {
                   name: `Maker Only - Order rejected if matches as a taker`,
