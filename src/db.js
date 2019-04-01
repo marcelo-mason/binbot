@@ -111,9 +111,9 @@ class Db {
   getLatestPairs(key) {
     const matches = this.db
       .get('inputHistory')
-      .uniqBy(key)
       .sortBy('timestamp')
       .reverse()
+      .uniqBy(key)
       .map(key)
       .take(4)
       .value()
