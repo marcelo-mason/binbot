@@ -11,16 +11,16 @@ class Db {
     this.db = low(adapter)
     this.db
       .defaults({
-        orders: [],
+        triggerOrders: [],
         inputHistory: [],
         orderHistory: []
       })
       .write()
   }
 
-  addOrder(payload, data) {
+  addTriggerOrder(payload, data) {
     this.db
-      .get('orders')
+      .get('triggerOrders')
       .push({
         pair: data.pair,
         payload,
@@ -29,18 +29,18 @@ class Db {
       .write()
   }
 
-  removeOrder(id) {
+  removeTriggerOrder(id) {
     this.db
-      .get('orders')
+      .get('triggerOrders')
       .remove({
         id
       })
       .write()
   }
 
-  updateState(ticker) {
+  updateTriggerOrderState(ticker) {
     const orders = this.db
-      .get('orders')
+      .get('triggerOrders')
       .filter({
         pair: ticker.symbol
       })
@@ -48,7 +48,7 @@ class Db {
 
     orders.forEach(o => {
       this.db
-        .get('orders')
+        .get('triggerOrders')
         .find({
           id: o.id
         })
@@ -69,9 +69,9 @@ class Db {
     })
   }
 
-  getOrdersGroupedByPair() {
+  getTriggerOrders() {
     return this.db
-      .get('orders')
+      .get('triggerOrders')
       .groupBy('pair')
       .toPairs()
       .map(pair => _.zipObject(['pair', 'orders'], pair))

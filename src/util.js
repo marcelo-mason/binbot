@@ -21,10 +21,6 @@ export function colorizeColumns(arr) {
   return arr.map(line => [chalk.whiteBright(line[0]), chalk.cyan(line[1])])
 }
 
-export function addQuoteSuffix(arr, quote) {
-  return arr.map(line => [line[0], `${line[1]} ${quote}`, line[2], `${line[3]} ${quote}`, line[4]])
-}
-
 export function timestamp() {
   return Math.round(new Date().getTime() / 1000)
 }

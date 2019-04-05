@@ -8,16 +8,8 @@ import Case from 'case'
 
 import db from '../db'
 import binance from '../binance'
-import { bn, colorizeColumns, addQuoteSuffix, timestamp, fix } from '../util'
+import { bn, colorizeColumns, timestamp, fix } from '../util'
 import { log } from '../logger'
-
-const index = {
-  number: 0,
-  price: 1,
-  quantity: 2,
-  cost: 3,
-  validation: 4
-}
 
 class LimitCommand {
   constructor() {
@@ -62,23 +54,11 @@ class LimitCommand {
       ? await this.calculateQuantityforSell(balances, data)
       : await this.calculateQuantityforBuy(balances, data)
 
-    // create a one order payload
+    // create the payload
 
-    let payload = [
-      [
-        1,
-        data.price,
-        quantity,
-        bn(data.price)
-          .multipliedBy(quantity)
-          .fix(this.ei.precision.quote)
-      ]
-    ]
-
-    // or a multi-order spread payload
+    const payload = await this.createPayload(quantity, data)
 
     if (data.isSpread) {
-      payload = await this.calculateSpreadPayload(quantity, data)
       this.errorCorrectQuantities(payload, quoteToSpend, quantity)
     }
 
@@ -102,7 +82,7 @@ class LimitCommand {
       })
 
       if (res.correct) {
-        db.addOrder(payload, data)
+        db.addTriggerOrder(payload, data)
       }
     } else {
       let res = await prompts({
@@ -194,7 +174,27 @@ class LimitCommand {
     }
   }
 
-  async calculateSpreadPayload(quantity, data) {
+  async createPayload(quantity, data) {
+    // if not spread create a one order payload
+
+    if (!data.isSpread) {
+      return [
+        {
+          num: 1,
+          price: data.price,
+          quantity,
+          cost: bn(data.price)
+            .multipliedBy(quantity)
+            .fix(this.ei.precision.quote),
+          iceberg: data.opts.iceberg
+            ? bn(this.ei.iceberg.qty(quantity))
+                .multipliedBy(data.price)
+                .fix(this.ei.precision.price)
+            : ''
+        }
+      ]
+    }
+
     // calculate spread
 
     const spreadWidth = bn(data.max)
@@ -242,18 +242,39 @@ class LimitCommand {
           quantities = quantities.reverse()
         }
       }
-
-      payload = _.zip(_.range(1, data.orderCount + 1), prices, quantities)
+      payload = _.zipWith(
+        _.range(1, data.orderCount + 1),
+        prices,
+        quantities,
+        (num, price, quantity) => {
+          return {
+            num,
+            price,
+            quantity
+          }
+        }
+      )
     }
 
     if (data.dist === 'equal') {
       let quantities = Array(data.orderCount).fill(portion.fix(this.ei.precision.quantity))
 
-      payload = _.zip(_.range(1, data.orderCount + 1), prices, quantities)
+      payload = _.zipWith(
+        _.range(1, data.orderCount + 1),
+        prices,
+        quantities,
+        (num, price, quantity) => {
+          return {
+            num,
+            price,
+            quantity
+          }
+        }
+      )
 
-      const quoteTotal = payload.reduce((acc, curr) => {
-        return bn(curr[index.price])
-          .multipliedBy(curr[index.quantity])
+      const quoteTotal = payload.reduce((acc, o) => {
+        return bn(o.price)
+          .multipliedBy(o.quantity)
           .plus(acc)
           .toString()
       }, 0)
@@ -261,20 +282,24 @@ class LimitCommand {
       const quotePortion = bn(quoteTotal).dividedBy(data.orderCount)
 
       payload.forEach(o => {
-        o[index.quantity] = bn(quotePortion)
-          .dividedBy(o[index.price])
+        o.quantity = bn(quotePortion)
+          .dividedBy(o.price)
           .fix(this.ei.precision.quantity)
       })
     }
 
-    // calculate costs
-
     payload.forEach(o => {
-      o.push(
-        bn(o[index.price])
-          .multipliedBy(o[index.quantity])
-          .fix(this.ei.precision.quote)
-      )
+      // add in costs
+      o.cost = bn(o.price)
+        .multipliedBy(o.quantity)
+        .fix(this.ei.precision.quote)
+
+      // add in iceberg
+      o.iceberg = data.opts.iceberg
+        ? bn(this.ei.iceberg.qty(o.quantity))
+            .multipliedBy(o.price)
+            .fix(this.ei.precision.price)
+        : ''
     })
 
     return payload
@@ -283,12 +308,12 @@ class LimitCommand {
   // when calculating quantities based on a quote amount e.g. POLY quantity based off of BTC, an average base price is used (max+min)/2. once the order distribution is generated the final tally of the quote costs may differ from what was requested. this code adds or removes a certain amount of base quantity from the middle order to correct for this difference.
   errorCorrectQuantities(payload, quoteToSpend, quantity) {
     const line = payload[parseInt(payload.length / 2) - 1]
-    const linePrice = line[index.price]
-    const lineQty = line[index.quantity]
+    const linePrice = line.price
+    const lineQty = line.quantity
 
     if (quoteToSpend) {
       const totalCost = payload.reduce((acc, curr) => {
-        return bn(acc).plus(curr[index.cost])
+        return bn(acc).plus(curr.cost)
       }, 0)
 
       const diff = bn(quoteToSpend)
@@ -298,21 +323,21 @@ class LimitCommand {
       const remainsQty = bn(bn(diff).absoluteValue()).dividedBy(linePrice)
 
       if (diff > 0) {
-        line[index.quantity] = bn(remainsQty)
+        line.quantity = bn(remainsQty)
           .plus(lineQty)
           .fix(this.ei.precision.quantity)
       } else {
-        line[index.quantity] = bn(lineQty)
+        line.quantity = bn(lineQty)
           .minus(remainsQty)
           .fix(this.ei.precision.quantity)
       }
 
-      line[index.cost] = bn(line[index.price])
-        .multipliedBy(line[index.quantity])
+      line.cost = bn(line.price)
+        .multipliedBy(line.quantity)
         .fix(this.ei.precision.quote)
     } else {
-      const totalQuantity = payload.reduce((acc, curr) => {
-        return bn(acc).plus(curr[index.quantity])
+      const totalQuantity = payload.reduce((acc, o) => {
+        return bn(acc).plus(o.quantity)
       }, 0)
 
       const diff = bn(quantity)
@@ -320,12 +345,12 @@ class LimitCommand {
         .toString()
 
       if (diff < 0 || diff > 0) {
-        line[index.quantity] = bn(lineQty)
+        line.quantity = bn(lineQty)
           .plus(diff)
           .fix(this.ei.precision.quantity)
 
-        line[index.cost] = bn(line[index.price])
-          .multipliedBy(line[index.quantity])
+        line.cost = bn(line.price)
+          .multipliedBy(line.quantity)
           .fix(this.ei.precision.quote)
       }
     }
@@ -334,8 +359,8 @@ class LimitCommand {
   async validateOrders(payload, data) {
     let hasError = false
     await async.eachSeries(payload, async o => {
-      const price = o[index.price]
-      const quantity = o[index.quantity]
+      const price = o.price
+      const quantity = o.quantity
       let error = ''
 
       if (!this.ei.validate.value(price, quantity)) {
@@ -354,27 +379,8 @@ class LimitCommand {
       }
 
       if (error) {
-        o[index.validation] = `${chalk.bold.red('✖')} ${chalk.bold.red(error)}`
+        o.validation = `${chalk.bold.red('✖')} ${chalk.bold.red(error)}`
         hasError = true
-      } else {
-        /*
-        // test order
-        const res = await binance.testOrder(
-          data.pair,
-          data.side,
-          idable(8, false),
-          quantity,
-          this.ie.iceberg.qty(quantity),
-          price,
-          data.opts
-        )
-
-        if (res.success) {
-          o[index.validation] = `${chalk.bold.green('✔')}`
-        } else {
-          o[index.validation] = `${chalk.bold.red('✖')} ${chalk.bold.red(res.msg)}`
-          hasError = true
-        } */
       }
     })
     return !hasError
@@ -452,9 +458,27 @@ class LimitCommand {
     log.log()
 
     const orderTable = [
-      [chalk.whiteBright('#'), 'Price', 'Quantity', 'Cost', chalk.white(' ')],
-      ...addQuoteSuffix(payload, data.quote)
+      [
+        chalk.whiteBright('#'),
+        'Price',
+        'Quantity',
+        'Cost',
+        data.opts.iceberg ? 'Iceberg Size' : '',
+        chalk.white(' ')
+      ]
     ]
+
+    payload.forEach(o => {
+      orderTable.push([
+        o.num,
+        `${o.price} ${data.quote}`,
+        o.quantity,
+        `${o.cost} ${data.quote}`,
+        data.opts.iceberg ? `(${o.iceberg} ${data.quote})` : '',
+        o.validation
+      ])
+    })
+
     log.log(`ORDERS`)
     log.log()
     log.log(asTable(orderTable))
@@ -462,14 +486,14 @@ class LimitCommand {
 
     const totalCost = fix(
       payload.reduce((acc, curr) => {
-        return bn(acc).plus(curr[index.cost])
+        return bn(acc).plus(curr.cost)
       }, 0),
       this.ei.precision.quote
     )
 
     const totalQuantity = fix(
       payload.reduce((acc, curr) => {
-        return bn(acc).plus(curr[index.quantity])
+        return bn(acc).plus(curr.quantity)
       }, 0),
       this.ei.precision.quantity
     )
@@ -517,9 +541,9 @@ class LimitCommand {
         data.pair,
         data.side,
         idable(8, false),
-        o[index.quantity],
-        this.ei.iceberg.qty(o[index.quantity]),
-        o[index.price],
+        o.quantity,
+        this.ei.iceberg.qty(o.quantity),
+        o.price,
         data.opts
       )
 

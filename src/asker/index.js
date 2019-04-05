@@ -1,10 +1,14 @@
 import inquirer from 'inquirer'
+import chalk from 'chalk'
 import { Subject } from 'rxjs'
 
+import db from '../db'
 import { log } from '../logger'
 import binance from '../binance'
 import limit from './limit'
 import { fix, bn } from '../util'
+import monitor from './commands/monitor'
+import settings from '../../settings.json'
 
 const action = {
   type: 'list',
@@ -18,8 +22,16 @@ const action = {
     {
       name: 'Limit Sell',
       value: 'limit_SELL'
+    },
+    {
+      name: 'Monitor',
+      value: 'monitor'
     }
-  ]
+  ],
+  default: answers => {
+    const latest = db.getLatestHistory(answers)
+    return latest['ac']
+  }
 }
 
 const prompts = new Subject()
@@ -70,9 +82,17 @@ class Inquire {
 
   async start() {
     this.init()
+    this.showInstructions()
 
     // ask action question
     prompts.next(action)
+  }
+
+  showInstructions() {
+    if (!settings.hideInstructions) {
+      log.log(chalk.yellow('(Use arrow keys and <enter> to select, <tab> to fill)'))
+      log.log()
+    }
   }
 
   async onEachAnswer(o) {
@@ -99,6 +119,9 @@ class Inquire {
         }
         prompts.next(await limit.getQuestion(next, o.answer))
         break
+      case 'monitor': {
+        await monitor.start()
+      }
     }
   }
 }

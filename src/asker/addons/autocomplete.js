@@ -201,7 +201,7 @@ class AutocompletePrompt extends Base {
     var len
     var keyName = (e.key && e.key.name) || undefined
 
-    if (keyName === 'tab' && this.opt.suggestOnly) {
+    if (keyName === 'tab') {
       if (this.currentChoices.getChoice(this.selected)) {
         this.rl.write(ansiEscapes.cursorLeft)
         var autoCompleted = this.currentChoices.getChoice(this.selected).value
