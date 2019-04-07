@@ -1,36 +1,19 @@
 import blessed from 'blessed'
+import Case from 'case'
+import Table from './controls/table'
+import _ from 'lodash'
 
 class UI {
   constructor() {
-    this.isInit = false
-    this.index = {
-      pair: 1,
-      side: 2,
-      price: 3,
-      quantity: 4,
-      trigger: 5,
-      currentPrice: 6,
-      distance: 7
-    }
-    this.titles = [['Side', 'Pair', 'Quantity', 'Price', 'Trigger', 'Current Price', 'Distance']]
-    this.formatOrder = order => {
-      return [
-        order.side,
-        order.pair,
-        order.quantity === 'tbd' ? `${order.percentage}%` : order.quantity,
-        order.price,
-        order.trigger,
-        order.state.currentPrice,
-        order.state.distance
-      ]
-    }
+    this.tables = []
+    this.screen = null
+    this.layout = null
   }
 
   init() {
-    if (this.isInit) {
+    if (this.screen) {
       return
     }
-    this.isInit = true
 
     this.screen = blessed.screen({
       smartCSR: true,
@@ -46,44 +29,95 @@ class UI {
       height: '100%'
     })
 
-    this.table = blessed.listtable({
-      parent: this.layout,
-      top: '0',
-      width: '100%',
-      data: null,
-      border: 'line',
-      align: 'left',
-      tags: true,
-      noCellBorders: true,
-      style: {
-        border: {
-          fg: 'white'
-        },
-        header: {
-          fg: 'blue',
-          bold: true
-        }
-      }
-    })
-
-    this.table.setData(this.listData)
-
     this.screen.key(['escape', 'quote', 'C-c'], () => {
       return this.screen.destroy()
     })
-
-    this.screen.render()
   }
 
-  update(grouped) {
+  create(id) {
+    const table = {
+      id,
+      table: new Table({
+        parent: this.layout,
+        keys: false,
+        fg: 'white',
+        interactive: false,
+        label: '',
+        width: '25%',
+        height: '33%',
+        border: { type: 'line', fg: 'cyan' },
+        columnSpacing: 3,
+        columnWidth: [10, 15]
+      })
+    }
+    this.tables.push(table)
+    return table
+  }
+
+  get(id) {
     this.init()
-    const data = grouped.reduce((acc, { orders }) => {
-      const arrs = orders.map(o => this.formatOrder(o))
-      return acc.concat(arrs)
-    }, this.titles)
-    this.table.setData(data)
+    const exists = _.find(this.tables, { id })
+    if (!exists) {
+      return this.create(id)
+    }
+    return exists
+  }
+
+  remove(id) {
+    _.remove(this.tables, { id })
+  }
+
+  update(orders) {
+    const packOrder = o => {
+      const data = []
+
+      data.push(['Action', `${Case.capital(o.data.type)} ${Case.capital(o.data.side)}`])
+
+      data.push(['Pair', `${o.data.pair}`])
+
+      if (o.data.qtyType === 'percent-base') {
+        data.push(['Quantity', `${o.data.qtyValue}% ${o.data.base}`])
+      }
+      if (o.data.qtyType === 'percent-quote') {
+        data.push(['Quantity', `${o.data.qtyValue}% ${o.data.quote}`])
+      }
+      if (o.data.qtyType === 'base') {
+        data.push(['Quantity', `${o.data.qtyValue} ${o.data.base}`])
+      }
+      if (o.data.qtyType === 'quote') {
+        data.push(['Quantity', `${o.data.qtyValue} ${o.data.quote}`])
+      }
+
+      if (o.data.orderCount > 1) {
+        data.push(['Min Price', o.data.min])
+        data.push(['Max Price', o.data.max])
+        data.push([
+          'Orders',
+          `${o.data.orderCount} ${o.data.dist} (${o.data.opts.iceberg ? 'i' : ''}${
+            o.data.opts.maker ? 'm' : ''
+          }${o.data.opts.cancelStops ? 's' : ''})`
+        ])
+      } else {
+        data.push([`${Case.capital(o.data.side)} Price`, o.data.price])
+      }
+      data.push(['Trigger', o.data.trigger])
+      if (o.state) {
+        data.push(['Current', o.state.currentPrice])
+        data.push(['Distance', o.state.distance])
+      }
+      return data
+    }
+
+    orders.forEach(o => {
+      const packed = packOrder(o)
+      const { table } = this.get(o.id)
+      table.setLabel(` ${o.id} `)
+      table.setData({
+        data: packed
+      })
+    })
+
     this.screen.render()
   }
 }
-
 export default new UI()

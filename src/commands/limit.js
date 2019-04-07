@@ -74,7 +74,7 @@ class LimitCommand {
       return
     }
 
-    if (data.isLater) {
+    if (data.isTrigger) {
       let res = await prompts({
         type: 'confirm',
         name: 'correct',
@@ -82,7 +82,7 @@ class LimitCommand {
       })
 
       if (res.correct) {
-        db.addTriggerOrder(payload, data)
+        this.store(payload, data)
       }
     } else {
       let res = await prompts({
@@ -105,10 +105,10 @@ class LimitCommand {
       }
     }
 
-    if (data.qtyType === 'quote' || data.qtyType === 'percent') {
+    if (data.qtyType === 'quote' || data.qtyType === 'percent-quote') {
       let quoteToSpend = data.qtyValue
 
-      if (data.qtyType === 'percent') {
+      if (data.qtyType === 'percent-quote') {
         quoteToSpend = bn(balances.quote)
           .multipliedBy(data.qtyValue)
           .dividedBy(100)
@@ -120,7 +120,7 @@ class LimitCommand {
             .plus(data.min)
             .dividedBy(2)
             .toString()
-        : data.min
+        : data.price
 
       const quantity = bn(quoteToSpend)
         .dividedBy(avgPrice)
@@ -141,7 +141,7 @@ class LimitCommand {
       }
     }
 
-    if (data.qtyType === 'percent') {
+    if (data.qtyType === 'percent-base') {
       const quantity = bn(balances.base)
         .multipliedBy(data.qtyValue)
         .dividedBy(100)
@@ -161,7 +161,7 @@ class LimitCommand {
             .plus(data.min)
             .dividedBy(2)
             .toString()
-        : data.min
+        : data.price
 
       const quantity = bn(quoteToSpend)
         .dividedBy(avgPrice)
@@ -186,11 +186,14 @@ class LimitCommand {
           cost: bn(data.price)
             .multipliedBy(quantity)
             .fix(this.ei.precision.quote),
-          iceberg: data.opts.iceberg
+          icebergSize: data.opts.iceberg
             ? bn(this.ei.iceberg.qty(quantity))
                 .multipliedBy(data.price)
                 .fix(this.ei.precision.price)
-            : ''
+            : undefined,
+          icebergQty: data.opts.iceberg
+            ? bn(this.ei.iceberg.qty(quantity)).fix(this.ei.precision.price)
+            : undefined
         }
       ]
     }
@@ -295,11 +298,15 @@ class LimitCommand {
         .fix(this.ei.precision.quote)
 
       // add in iceberg
-      o.iceberg = data.opts.iceberg
+      o.icebergSize = data.opts.iceberg
         ? bn(this.ei.iceberg.qty(o.quantity))
             .multipliedBy(o.price)
             .fix(this.ei.precision.price)
-        : ''
+        : undefined
+
+      o.icebergQty = data.opts.iceberg
+        ? bn(this.ei.iceberg.qty(o.quantity)).fix(this.ei.precision.price)
+        : undefined
     })
 
     return payload
@@ -359,21 +366,19 @@ class LimitCommand {
   async validateOrders(payload, data) {
     let hasError = false
     await async.eachSeries(payload, async o => {
-      const price = o.price
-      const quantity = o.quantity
       let error = ''
 
-      if (!this.ei.validate.value(price, quantity)) {
+      if (!this.ei.validate.value(o.price, o.quantity)) {
         error = `Cost too small, min = ${this.ei.notional.min} `
       }
-      if (!this.ei.validate.quantity(quantity)) {
+      if (!this.ei.validate.quantity(o.quantity)) {
         error = `Quantity out of range ${this.ei.quantity.min}-${this.ei.quantity.max} `
       }
-      if (!this.ei.validate.price(price)) {
+      if (!this.ei.validate.price(o.price)) {
         error = `Price out of range ${this.ei.price.min}-${this.ei.price.max} `
       }
       if (data.opts.iceberg) {
-        if (!this.ei.validate.price(price)) {
+        if (!this.ei.validate.price(o.price)) {
           error = `Price out of range ${this.ei.price.min}-${this.ei.price.max} `
         }
       }
@@ -381,6 +386,35 @@ class LimitCommand {
       if (error) {
         o.validation = `${chalk.bold.red('✖')} ${chalk.bold.red(error)}`
         hasError = true
+      }
+
+      if (data.isTrigger) {
+        // test order with binance
+        const { ticket, success, msg } = await binance.testOrder(
+          data.pair,
+          data.side,
+          idable(6, false),
+          o.quantity,
+          o.icebergQty,
+          o.price,
+          data.opts
+        )
+
+        await db.recordTestHistory({
+          timestamp: timestamp(),
+          ticket,
+          result: {
+            success,
+            msg
+          }
+        })
+
+        if (success) {
+          o.validation = `${chalk.bold.green('✔')}`
+        } else {
+          o.validation = `${chalk.bold.red('✖')} ${chalk.bold.red(msg)}`
+          hasError = true
+        }
       }
     })
     return !hasError
@@ -400,28 +434,24 @@ class LimitCommand {
         .absoluteValue()
         .toFixed(0)
 
-      const avgPrice = data.isSpread
-        ? bn(data.max)
-            .plus(data.min)
-            .dividedBy(2)
-            .toString()
-        : data.min
-
-      let distance = bn(currentPrice)
-        .minus(avgPrice)
-        .dividedBy(currentPrice)
-        .multipliedBy(100)
-        .toFixed(2)
+      const avgPrice = bn(data.max)
+        .plus(data.min)
+        .dividedBy(2)
         .toString()
 
-      if (data.isSell) {
-        distance = bn(avgPrice)
-          .minus(currentPrice)
-          .dividedBy(avgPrice)
-          .multipliedBy(100)
-          .toFixed(2)
-          .toString()
-      }
+      const distance = data.isSell
+        ? bn(avgPrice)
+            .minus(currentPrice)
+            .dividedBy(avgPrice)
+            .multipliedBy(100)
+            .toFixed(2)
+            .toString()
+        : bn(currentPrice)
+            .minus(avgPrice)
+            .dividedBy(currentPrice)
+            .multipliedBy(100)
+            .toFixed(2)
+            .toString()
 
       display.push([
         `${Case.capital(data.side)} price range`,
@@ -429,18 +459,25 @@ class LimitCommand {
       ])
       display.push([`${Case.capital(data.side)} distance`, `${distance}% from current`])
     } else {
-      const distance = bn(currentPrice)
-        .minus(data.price)
-        .dividedBy(currentPrice)
-        .multipliedBy(100)
-        .toFixed(2)
-        .toString()
+      const distance = data.isSell
+        ? bn(data.price)
+            .minus(currentPrice)
+            .dividedBy(data.price)
+            .multipliedBy(100)
+            .toFixed(2)
+            .toString()
+        : bn(currentPrice)
+            .minus(data.price)
+            .dividedBy(currentPrice)
+            .multipliedBy(100)
+            .toFixed(2)
+            .toString()
 
       display.push([`${Case.capital(data.side)} price`, `${data.price} ${data.quote}`])
       display.push([`${Case.capital(data.side)} distance`, `${distance}% from current`])
     }
 
-    if (data.isLater) {
+    if (data.isTrigger) {
       const triggerDistance = bn(currentPrice)
         .minus(data.trigger)
         .absoluteValue()
@@ -474,7 +511,7 @@ class LimitCommand {
         `${o.price} ${data.quote}`,
         o.quantity,
         `${o.cost} ${data.quote}`,
-        data.opts.iceberg ? `(${o.iceberg} ${data.quote})` : '',
+        data.opts.iceberg ? `(${o.icebergSize} ${data.quote})` : '',
         o.validation
       ])
     })
@@ -530,6 +567,13 @@ class LimitCommand {
     log.log()
   }
 
+  async store(payload, data) {
+    payload.forEach(o => {
+      o.validation = undefined
+    })
+    await db.addTriggerOrder(payload, data)
+  }
+
   async create(payload, data) {
     if (data.opts.cancelStops) {
       await binance.cancelStops(data.pair)
@@ -540,14 +584,14 @@ class LimitCommand {
       const { ticket, result } = await binance.createOrder(
         data.pair,
         data.side,
-        idable(8, false),
+        idable(6, false),
         o.quantity,
-        this.ei.iceberg.qty(o.quantity),
+        o.icebergQty,
         o.price,
         data.opts
       )
 
-      db.recordOrderHistory({
+      await db.recordOrderHistory({
         timestamp: timestamp(),
         ticket,
         result

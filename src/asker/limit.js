@@ -24,9 +24,11 @@ class LimitAsker {
             return new Promise(async resolve => {
               const matching = await binance.getMatchingPairs(input)
               if (!input) {
-                const latestPairs = db.getLatestPairs(name)
-                resolve(latestPairs)
-                return
+                const pairs = await db.getLatestPairs(name)
+                if (pairs) {
+                  resolve(pairs)
+                }
+                resolve([])
               }
               resolve(matching)
             })
@@ -39,9 +41,9 @@ class LimitAsker {
           type: 'input-plus',
           name,
           message: 'How many orders to set?',
-          default: answers => {
+          default: async answers => {
             this.answers = answers
-            const latest = db.getLatestHistory(answers)
+            const latest = await db.getLatestHistory(answers)
             return latest ? latest[name] : 1
           },
           validate: answer => {
@@ -55,9 +57,9 @@ class LimitAsker {
           type: 'input-plus',
           name,
           message: `Whats the ${prev > 1 ? 'min' : Case.lower(this.info.side)} price?`,
-          default: answers => {
+          default: async answers => {
             this.answers = answers
-            const latest = db.getLatestHistory(answers)
+            const latest = await db.getLatestHistory(answers)
             return latest ? latest[name] : this.info.currentPrice
           },
           validate: answer => {
@@ -74,9 +76,9 @@ class LimitAsker {
           when: () => {
             return this.answers['limit_1'] > 1
           },
-          default: answers => {
+          default: async answers => {
             this.answers = answers
-            const latest = db.getLatestHistory(answers)
+            const latest = await db.getLatestHistory(answers)
             return latest ? latest[name] : answers['limit_2']
           },
           validate: answer => {
@@ -90,9 +92,9 @@ class LimitAsker {
           type: 'list',
           name,
           message: 'When to set the order(s)?',
-          default: answers => {
+          default: async answers => {
             this.answers = answers
-            const latest = db.getLatestHistory(answers)
+            const latest = await db.getLatestHistory(answers)
             if (latest) {
               return latest[name]
             }
@@ -103,8 +105,8 @@ class LimitAsker {
               value: 'now'
             },
             {
-              name: `Later`,
-              value: 'later'
+              name: `Trigger`,
+              value: 'trigger'
             }
           ]
         }
@@ -116,11 +118,11 @@ class LimitAsker {
           name,
           message: `What price will trigger the order(s)?`,
           when: () => {
-            return this.answers['limit_4'] === 'later'
+            return this.answers['limit_4'] === 'trigger'
           },
-          default: answers => {
+          default: async answers => {
             this.answers = answers
-            const latest = db.getLatestHistory(answers)
+            const latest = await db.getLatestHistory(answers)
             return latest ? latest[name] : this.info.currentPrice
           },
           validate: answer => {
@@ -134,9 +136,9 @@ class LimitAsker {
           type: 'list',
           name,
           message: `How to supply the amount to ${Case.lower(this.info.side)}?`,
-          default: answers => {
+          default: async answers => {
             this.answers = answers
-            const latest = db.getLatestHistory(answers)
+            const latest = await db.getLatestHistory(answers)
             if (latest) {
               return latest[name]
             }
@@ -146,7 +148,7 @@ class LimitAsker {
               return [
                 {
                   name: `Percent of ${this.info.ei.base}`,
-                  value: 'percent'
+                  value: 'percent-base'
                 },
                 {
                   name: `Amount of ${this.info.ei.base}`,
@@ -161,7 +163,7 @@ class LimitAsker {
             return [
               {
                 name: `Percent of ${this.info.ei.quote}`,
-                value: 'percent'
+                value: 'percent-quote'
               },
               {
                 name: `Amount of ${this.info.ei.quote}`,
@@ -178,16 +180,16 @@ class LimitAsker {
       async prev => {
         const name = 'limit_7'
         if (this.info.isSell) {
-          if (prev === 'percent') {
+          if (prev === 'percent-base') {
             return {
               type: 'input-plus',
               name,
               message: `What percentage of your ${chalk.yellow(
                 this.info.balances.base
               )} ${chalk.yellow(this.info.ei.base)} would you like to sell?`,
-              default: answers => {
+              default: async answers => {
                 this.answers = answers
-                const latest = db.getLatestHistory(answers)
+                const latest = await db.getLatestHistory(answers)
                 return latest ? latest[name] : 100
               },
               validate: answer => {
@@ -202,9 +204,9 @@ class LimitAsker {
               message: `How many of your ${chalk.yellow(this.info.balances.base)} ${chalk.yellow(
                 this.info.ei.base
               )} would you like to sell?`,
-              default: answers => {
+              default: async answers => {
                 this.answers = answers
-                const latest = db.getLatestHistory(answers)
+                const latest = await db.getLatestHistory(answers)
                 if (latest) {
                   return latest[name]
                 }
@@ -220,9 +222,9 @@ class LimitAsker {
               name,
               message: `How many ${this.info.ei.quote} worth would you like to sell?`,
               suggestOnly: true,
-              default: answers => {
+              default: async answers => {
                 this.answers = answers
-                const latest = db.getLatestHistory(answers)
+                const latest = await db.getLatestHistory(answers)
                 if (latest) {
                   return latest[name]
                 }
@@ -233,16 +235,16 @@ class LimitAsker {
             }
           }
         } else {
-          if (prev === 'percent') {
+          if (prev === 'percent-quote') {
             return {
               type: 'input-plus',
               name,
               message: `What percentage of your ${chalk.yellow(
                 this.info.balances.quote
               )} ${chalk.yellow(this.info.ei.quote)} would you like to spend?`,
-              default: answers => {
+              default: async answers => {
                 this.answers = answers
-                const latest = db.getLatestHistory(answers)
+                const latest = await db.getLatestHistory(answers)
                 return latest ? latest[name] : 100
               },
               validate: answer => {
@@ -255,9 +257,9 @@ class LimitAsker {
               type: 'input-plus',
               name,
               message: `How many ${this.info.ei.base} would you like to buy?`,
-              default: answers => {
+              default: async answers => {
                 this.answers = answers
-                const latest = db.getLatestHistory(answers)
+                const latest = await db.getLatestHistory(answers)
                 if (latest) {
                   return latest[name]
                 }
@@ -273,10 +275,10 @@ class LimitAsker {
               name,
               message: `How many ${this.info.ei.quote} would you like to spend?`,
               suggestOnly: true,
-              source: async answers => {
+              source: answers => {
                 this.answers = answers
                 return new Promise(async resolve => {
-                  const latest = db.getLatestHistory(answers)
+                  const latest = await db.getLatestHistory(answers)
                   if (latest) {
                     resolve([latest[name] || this.info.balances.quote])
                     return
@@ -316,9 +318,9 @@ class LimitAsker {
           when: () => {
             return this.answers['limit_1'] > 1
           },
-          default: answers => {
+          default: async answers => {
             this.answers = answers
-            const latest = db.getLatestHistory(answers)
+            const latest = await db.getLatestHistory(answers)
             if (latest) {
               return latest[name]
             }
@@ -331,9 +333,9 @@ class LimitAsker {
           type: 'checkbox-plus',
           name,
           message: `Order properties`,
-          default: answers => {
+          default: async answers => {
             this.answers = answers
-            const latest = db.getLatestHistory(answers)
+            const latest = await db.getLatestHistory(answers)
             if (latest) {
               return latest[name]
             }
@@ -343,12 +345,11 @@ class LimitAsker {
               resolve([
                 {
                   name: `Iceberg Order - Hides 90% of the quantity`,
-                  value: 'iceberg',
-                  checked: true
+                  value: 'iceberg'
                 },
                 {
                   name: `Maker Only - Order rejected if matches as a taker`,
-                  value: 'makerOnly'
+                  value: 'maker'
                 },
                 {
                   name: `Cancel Stops - Cancel stops before creating orders`,
@@ -384,16 +385,17 @@ class LimitAsker {
 
   parseAnswers(answers) {
     return {
+      type: 'LIMIT',
       side: this.info.side,
       isSell: this.info.isSell,
       isSpread: parseInt(answers['limit_1']) > 1,
-      isLater: answers['limit_4'] === 'later',
+      isTrigger: answers['limit_4'] === 'trigger',
       base: this.info.ei.base,
       quote: this.info.ei.quote,
       pair: `${this.info.ei.base}${this.info.ei.quote}`,
       orderCount: parseInt(answers['limit_1']),
       price: fix(answers['limit_2'], this.info.ei.precision.price),
-      min: fix(answers['limit_2'], this.info.ei.precision.price),
+      min: answers['limit_3'] ? fix(answers['limit_2'], this.info.ei.precision.price) : undefined,
       max: fix(answers['limit_3'], this.info.ei.precision.price),
       trigger: answers['limit_5'] ? fix(answers['limit_5'], this.info.ei.precision.price) : null,
       qtyType: answers['limit_6'],

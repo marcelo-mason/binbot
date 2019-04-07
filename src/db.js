@@ -1,27 +1,36 @@
 import low from 'lowdb'
-import FileSync from 'lowdb/adapters/FileSync'
 import _ from 'lodash'
+import idable from 'idable'
 
-import { bn } from './util'
+import { bn, fix } from './util'
+import Adapter from './dbAdapter'
 
-const adapter = new FileSync('db.json')
+const adapter = new Adapter()
 
 class Db {
   constructor() {
-    this.db = low(adapter)
+    this.db = null
+    this.init()
+  }
+
+  async init() {
+    this.db = await low(adapter)
     this.db
       .defaults({
         triggerOrders: [],
         inputHistory: [],
-        orderHistory: []
+        orderHistory: [],
+        testHistory: []
       })
       .write()
   }
 
-  addTriggerOrder(payload, data) {
+  async addTriggerOrder(payload, data) {
+    await this.init()
     this.db
       .get('triggerOrders')
       .push({
+        id: idable(6, false),
         pair: data.pair,
         payload,
         data
@@ -29,7 +38,8 @@ class Db {
       .write()
   }
 
-  removeTriggerOrder(id) {
+  async removeTriggerOrder(id) {
+    await this.init()
     this.db
       .get('triggerOrders')
       .remove({
@@ -38,7 +48,8 @@ class Db {
       .write()
   }
 
-  updateTriggerOrderState(ticker) {
+  async updateTriggerOrderState(ticker, ei) {
+    await this.init()
     const orders = this.db
       .get('triggerOrders')
       .filter({
@@ -47,6 +58,15 @@ class Db {
       .value()
 
     orders.forEach(o => {
+      const distance =
+        bn(o.data.trigger)
+          .minus(ticker.currentClose)
+          .absoluteValue()
+          .dividedBy(o.data.trigger)
+          .multipliedBy(100)
+          .toFixed(2)
+          .toString() + '%'
+
       this.db
         .get('triggerOrders')
         .find({
@@ -54,45 +74,61 @@ class Db {
         })
         .assign({
           state: {
-            currentPrice: ticker.currentClose,
-            distance:
-              bn(o.trigger)
-                .minus(ticker.currentClose)
-                .absoluteValue()
-                .dividedBy(o.trigger)
-                .multipliedBy(100)
-                .toFixed(2)
-                .toString() + '%'
+            currentPrice: fix(ticker.currentClose, ei.precision.price),
+            distance
           }
         })
         .write()
     })
   }
 
-  getTriggerOrders() {
+  async getTriggerPairs() {
+    await this.init()
     return this.db
       .get('triggerOrders')
-      .groupBy('pair')
-      .toPairs()
-      .map(pair => _.zipObject(['pair', 'orders'], pair))
+      .uniqBy('pair')
+      .map('pair')
       .value()
   }
 
-  recordHistory(obj) {
+  async getTriggerOrders(pair) {
+    await this.init()
+    return this.db
+      .get('triggerOrders')
+      .filter({
+        data: {
+          pair
+        }
+      })
+      .value()
+  }
+
+  async recordHistory(obj) {
+    await this.init()
     this.db
       .get('inputHistory')
       .push(obj)
       .write()
   }
 
-  recordOrderHistory(obj) {
+  async recordOrderHistory(obj) {
+    await this.init()
     this.db
       .get('orderHistory')
       .push(obj)
       .write()
   }
 
-  getLatestHistory(match) {
+  async recordTestHistory(obj) {
+    await this.init()
+    this.db
+      .get('testHistory')
+      .push(obj)
+      .write()
+  }
+
+  async getLatestHistory(match) {
+    await this.init()
     const matches = this.db
       .get('inputHistory')
       .filter(match)
@@ -108,7 +144,8 @@ class Db {
     return matches[0]
   }
 
-  getLatestPairs(key) {
+  async getLatestPairs(key) {
+    await this.init()
     const matches = this.db
       .get('inputHistory')
       .sortBy('timestamp')

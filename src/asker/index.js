@@ -7,7 +7,7 @@ import { log } from '../logger'
 import binance from '../binance'
 import limit from './limit'
 import { fix, bn } from '../util'
-import monitor from './commands/monitor'
+import monitor from '../commands/monitor'
 import settings from '../../settings.json'
 
 const action = {
@@ -28,9 +28,11 @@ const action = {
       value: 'monitor'
     }
   ],
-  default: answers => {
-    const latest = db.getLatestHistory(answers)
-    return latest['ac']
+  default: async answers => {
+    const latest = await db.getLatestHistory(answers)
+    if (latest) {
+      return latest['ac']
+    }
   }
 }
 
@@ -64,8 +66,8 @@ class Inquire {
     this.side = null
   }
   async init() {
-    inquirer.registerPrompt('input-plus', require('./addons/input'))
-    inquirer.registerPrompt('autocomplete', require('./addons/autocomplete'))
+    inquirer.registerPrompt('input-plus', require('../controls/input'))
+    inquirer.registerPrompt('autocomplete', require('../controls/autocomplete'))
     inquirer.registerPrompt('checkbox-plus', require('inquirer-checkbox-plus-prompt'))
     const prompt = inquirer.prompt(prompts)
     prompt.ui.process.subscribe(this.onEachAnswer, log.error)

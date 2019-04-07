@@ -4,7 +4,7 @@ import moment from 'moment'
 import async from 'awaitable-async'
 import _ from 'lodash'
 
-import { bn } from './util'
+import { bn, toPrecision } from './util'
 import { log } from './logger'
 
 class Binance {
@@ -147,12 +147,12 @@ class Binance {
       newClientOrderId: id,
       symbol: pair,
       side,
-      type: opts.makerOnly ? 'LIMIT_MAKER' : 'LIMIT',
+      type: opts.maker ? 'LIMIT_MAKER' : 'LIMIT',
       quantity,
       price,
       icebergQty: icebergQty || 0
     }
-    if (!opts.makerOnly) {
+    if (!opts.maker) {
       ticket.timeInForce = 'GTC'
     }
     try {
@@ -172,23 +172,23 @@ class Binance {
   }
 
   async testOrder(pair, side, id, quantity, icebergQty, price, opts) {
-    const order = {
+    const ticket = {
       newClientOrderId: id,
       symbol: pair,
       side,
-      type: opts.makerOnly ? 'LIMIT_MAKER' : 'LIMIT',
+      type: opts.maker ? 'LIMIT_MAKER' : 'LIMIT',
       quantity,
       price,
       icebergQty: icebergQty || 0
     }
-    if (!opts.makerOnly) {
-      order.timeInForce = 'GTC'
+    if (!opts.maker) {
+      ticket.timeInForce = 'GTC'
     }
     try {
-      await this.rest.testOrder(order)
-      return { success: true }
+      await this.rest.testOrder(ticket)
+      return { success: true, ticket }
     } catch (e) {
-      return { success: false, msg: e.msg }
+      return { success: false, msg: e.msg, ticket }
     }
   }
 
@@ -208,18 +208,6 @@ class Binance {
     }
 
     const found = _.find(this.symbols, { symbol: pair })
-
-    function toPrecision(a) {
-      const s = a
-        .toString()
-        .replace(/([0-9]+(\.[0-9]+[1-9])?)(\.?0+$)/, '$1')
-        .split('.')
-
-      if (s.length > 1) {
-        return s[1].length
-      }
-      return 0
-    }
 
     const mnao = _.find(found.filters, { filterType: 'MAX_NUM_ALGO_ORDERS' })
     const lotSize = _.find(found.filters, { filterType: 'LOT_SIZE' })
@@ -248,7 +236,7 @@ class Binance {
       return true
     }
 
-    const obj = {
+    const ei = {
       base: found.baseAsset,
       quote: found.quoteAsset,
       iceberg: {
@@ -307,7 +295,7 @@ class Binance {
       }
     }
 
-    return obj
+    return ei
   }
 
   async getMatchingPairs(input) {

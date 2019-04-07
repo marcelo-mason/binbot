@@ -9,7 +9,19 @@ BigNumber.prototype.fix = function(precision) {
   return this.toFixedDown(precision).toString()
 }
 
+export function toPrecision(num) {
+  const s = num.replace(/([0-9]+(\.[0-9]+[1-9])?)(\.?0+$)/, '$1').split('.')
+
+  if (s.length > 1) {
+    return s[1].length
+  }
+  return 0
+}
+
 export function fix(num, precision) {
+  if (!num) {
+    return num
+  }
   return bn(num).fix(precision)
 }
 
