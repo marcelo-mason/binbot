@@ -1,6 +1,6 @@
 import program from 'commander'
 
-import monitor from './commands/monitor'
+import monitor from './services/monitorService'
 import { log } from './logger'
 import ui from './ui'
 import asker from './asker'

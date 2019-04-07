@@ -3,12 +3,13 @@ import Case from 'case'
 
 import db from '../db'
 import binance from '../binance'
-import spread from '../commands/limit'
+import LimitService from '../services/limitService'
 import { bn, timestamp, fix } from '../util'
 
 class LimitAsker {
   constructor() {
     this.info = null
+    this.account = null
     this.answers = {}
 
     this.questions = [
@@ -22,13 +23,13 @@ class LimitAsker {
           source: async (answers, input) => {
             this.answers = answers
             return new Promise(async resolve => {
-              const matching = await binance.getMatchingPairs(input)
+              const matching = await this.binance.getMatchingPairs(input)
               if (!input) {
                 const pairs = await db.getLatestPairs(name)
                 if (pairs) {
                   resolve(pairs)
                 }
-                resolve([])
+                resolve(['BTCUSDT', 'ETHUSDT', 'ETHBTC'])
               }
               resolve(matching)
             })
@@ -363,6 +364,13 @@ class LimitAsker {
     ]
   }
 
+  async init(account) {
+    this.account = account
+    this.binance = await binance.account(account)
+    this.limitService = new LimitService()
+    await this.limitService.init(account)
+  }
+
   setPairInfo(info) {
     this.info = info
   }
@@ -385,6 +393,7 @@ class LimitAsker {
 
   parseAnswers(answers) {
     return {
+      account: this.account,
       type: 'LIMIT',
       side: this.info.side,
       isSell: this.info.isSell,
@@ -418,8 +427,8 @@ class LimitAsker {
       opts: data.opts
     })
 
-    await spread.start(data)
+    await this.limitService.start(data)
   }
 }
 
-export default new LimitAsker()
+export default LimitAsker

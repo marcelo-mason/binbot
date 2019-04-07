@@ -2,6 +2,7 @@ import blessed from 'blessed'
 import Case from 'case'
 import Table from './controls/table'
 import _ from 'lodash'
+import keys from '../keys.json'
 
 class UI {
   constructor() {
@@ -70,6 +71,10 @@ class UI {
   update(orders) {
     const packOrder = o => {
       const data = []
+
+      if (keys.length > 1) {
+        data.push(['Account', `${Case.capital(o.account)}`])
+      }
 
       data.push(['Action', `${Case.capital(o.data.type)} ${Case.capital(o.data.side)}`])
 

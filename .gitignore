@@ -5,3 +5,4 @@ db.json
 *.sqlite
 combined.log
 settings.json
+keys.json

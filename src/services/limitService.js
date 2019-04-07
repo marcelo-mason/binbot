@@ -11,21 +11,26 @@ import binance from '../binance'
 import { bn, colorizeColumns, timestamp, fix } from '../util'
 import { log } from '../logger'
 
-class LimitCommand {
-  constructor() {
+class LimitService {
+  constructor(account) {
+    this.binance = null
     this.ei = null
   }
+
+  async init(account) {
+    this.binance = await binance.account(account)
+  }
+
   async start(data) {
     // get binance data
-
-    this.ei = await binance.getExchangeInfo(data.pair)
+    this.ei = await this.binance.getExchangeInfo(data.pair)
 
     const balances = {
-      quote: fix(await binance.balance(data.quote), this.ei.precision.quote),
-      base: fix(await binance.balance(data.base), this.ei.precision.quantity)
+      quote: fix(await this.binance.balance(data.quote), this.ei.precision.quote),
+      base: fix(await this.binance.balance(data.base), this.ei.precision.quantity)
     }
 
-    let currentPrice = fix(await binance.tickerPrice(data.pair), this.ei.precision.price)
+    let currentPrice = fix(await this.binance.tickerPrice(data.pair), this.ei.precision.price)
     if (!currentPrice) {
       return
     }
@@ -33,7 +38,7 @@ class LimitCommand {
     // figure in the base quantity locked in stops
 
     if (data.opts.cancelStops) {
-      const stops = await binance.getOpenStops(data.pair)
+      const stops = await this.binance.getOpenStops(data.pair)
       if (stops) {
         balances.base = bn(balances.base)
           .plus(stops.totalQuantity)
@@ -390,7 +395,7 @@ class LimitCommand {
 
       if (data.isTrigger) {
         // test order with binance
-        const { ticket, success, msg } = await binance.testOrder(
+        const { ticket, success, msg } = await this.binance.testOrder(
           data.pair,
           data.side,
           idable(6, false),
@@ -576,12 +581,12 @@ class LimitCommand {
 
   async create(payload, data) {
     if (data.opts.cancelStops) {
-      await binance.cancelStops(data.pair)
+      await this.binance.cancelStops(data.pair)
     }
 
     await async.eachSeries(payload, async o => {
       // create order
-      const { ticket, result } = await binance.createOrder(
+      const { ticket, result } = await this.binance.createOrder(
         data.pair,
         data.side,
         idable(6, false),
@@ -600,4 +605,4 @@ class LimitCommand {
   }
 }
 
-export default new LimitCommand()
+export default LimitService

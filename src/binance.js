@@ -6,31 +6,56 @@ import _ from 'lodash'
 
 import { bn, toPrecision } from './util'
 import { log } from './logger'
+import keys from '../keys.json'
+
+class AccountSelector {
+  constructor() {
+    this.accounts = {}
+  }
+
+  async account(account) {
+    let acc = this.accounts[account]
+    if (!acc) {
+      acc = new Binance()
+      await acc.init(account)
+      this.accounts[account] = acc
+    }
+    return acc
+  }
+}
+
+export default new AccountSelector()
 
 class Binance {
   constructor() {
-    this.rest = new BinanceRest({
-      key: process.env.BINANCE_KEY,
-      secret: process.env.BINANCE_SECRET,
-      timeout: 15000, // Optional, defaults to 15000, is the request time out in milliseconds
-      recvWindow: 10000, // Optional, defaults to 5000, increase if you're getting timestamp errors
-      disableBeautification: false,
-      handleDrift: false
-    })
-
-    this.ws = new BinanceWS(true)
-
+    this.symbols = null
+    this.balances = null
     this.retryOpts = {
       times: 6,
       interval: retryCount => {
         return 50 * Math.pow(2, retryCount)
       }
     }
+  }
 
-    this.symbols = null
-    this.balances = null
+  async init(account) {
+    const accountData = _.find(keys, { name: account })
+    this.rest = new BinanceRest({
+      key: accountData.key,
+      secret: accountData.secret,
+      recvWindow: 10000, // Optional, defaults to 5000, increase if you're getting timestamp errors
+      disableBeautification: false,
+      handleDrift: false
+    })
 
-    this.exchangeInfo()
+    await this.exchangeInfo()
+  }
+
+  getWs() {
+    if (!this.ws) {
+      this.ws = new BinanceWS(true)
+    }
+    return this.ws
   }
 
   async sync() {
@@ -349,5 +374,3 @@ class Binance {
     })
   }
 }
-
-export default new Binance()

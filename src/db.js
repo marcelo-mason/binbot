@@ -30,6 +30,7 @@ class Db {
     this.db
       .get('triggerOrders')
       .push({
+        account: data.account,
         id: idable(6, false),
         pair: data.pair,
         payload,

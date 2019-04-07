@@ -4,12 +4,17 @@ import _ from 'lodash'
 
 import binance from '../binance'
 import db from '../db'
-import limit from './limit'
+import LimitService from './limitService'
 import ui from '../ui'
+import keys from '../../keys.json'
 
-class Monitor {
+class MonitorService {
+  constructor() {
+    this.binance = null
+  }
   async start() {
-    const ok = await binance.sync()
+    this.binance = await binance.account(keys[0].name)
+    const ok = await this.binance.sync()
     if (!ok) {
       return
     }
@@ -22,9 +27,9 @@ class Monitor {
   }
 
   async createListener(pair) {
-    const ei = await binance.getExchangeInfo(pair)
+    const ei = await this.binance.getExchangeInfo(pair)
 
-    await binance.ws.onTicker(pair, async ticker => {
+    await this.binance.getWs().onTicker(pair, async ticker => {
       const orders = await db.getTriggerOrders(pair)
 
       if (orders.length) {
@@ -36,7 +41,10 @@ class Monitor {
           const below = order.data.direction === '<' && ticker.currentClose <= order.data.trigger
           if (above || below) {
             await db.removeTriggerOrder(order.id)
-            await limit.create(order.payload, order.data)
+
+            const limitService = new LimitService()
+            await limitService.init(order.account)
+            await limitService.create(order.payload, order.data)
           }
         })
       }
@@ -56,4 +64,4 @@ class Monitor {
   }
 }
 
-export default new Monitor()
+export default new MonitorService()

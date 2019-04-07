@@ -43,7 +43,6 @@
     "run-async": "^2.3.0",
     "rxjs": "^6.4.0",
     "strip-ansi": "^5.2.0",
-    "term.js": "0.0.7",
     "winston": "^3.2.1"
   },
   "devDependencies": {
