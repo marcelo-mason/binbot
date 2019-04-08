@@ -7,18 +7,18 @@ import chalk from 'chalk'
 import Case from 'case'
 
 import db from '../db'
-import binance from '../binance'
+import binanceAccounts from '../binance'
 import { bn, colorizeColumns, timestamp, fix } from '../util'
 import { log } from '../logger'
 
 class LimitService {
-  constructor(account) {
+  constructor() {
     this.binance = null
     this.ei = null
   }
 
   async init(account) {
-    this.binance = await binance.account(account)
+    this.binance = await binanceAccounts.get(account)
   }
 
   async start(data) {

@@ -2,7 +2,7 @@ import chalk from 'chalk'
 import Case from 'case'
 
 import db from '../db'
-import binance from '../binance'
+import binanceAccounts from '../binance'
 import LimitService from '../services/limitService'
 import { bn, timestamp, fix } from '../util'
 
@@ -11,8 +11,17 @@ class LimitAsker {
     this.info = null
     this.account = null
     this.answers = {}
+    this.limitService = new LimitService()
+  }
 
-    this.questions = [
+  async init(account) {
+    this.account = account
+    this.binance = await binanceAccounts.get(account)
+    await this.limitService.init(account)
+  }
+
+  get questions() {
+    return [
       async prev => {
         const name = 'limit_0'
         return {
@@ -364,14 +373,25 @@ class LimitAsker {
     ]
   }
 
-  async init(account) {
-    this.account = account
-    this.binance = await binance.account(account)
-    this.limitService = new LimitService()
-    await this.limitService.init(account)
-  }
+  async pullPairInfo(pair, side) {
+    const info = {
+      side,
+      isSell: side === 'SELL',
+      ei: await this.binance.getExchangeInfo(pair)
+    }
+    info.balances = {
+      quote: fix(await this.binance.balance(info.ei.quote), info.ei.precision.quote),
+      base: fix(await this.binance.balance(info.ei.base), info.ei.precision.quantity)
+    }
+    info.currentPrice = fix(await this.binance.tickerPrice(pair), info.ei.precision.price)
 
-  setPairInfo(info) {
+    // figure-in the base quantity locked in stops
+    const stops = await this.binance.getOpenStops(pair)
+    if (stops) {
+      info.balances.base = bn(info.balances.base)
+        .plus(stops.totalQuantity)
+        .fix(info.ei.precision.quantity)
+    }
     this.info = info
   }
 
@@ -391,7 +411,7 @@ class LimitAsker {
     return next
   }
 
-  parseAnswers(answers) {
+  packData(answers) {
     return {
       account: this.account,
       type: 'LIMIT',
@@ -419,9 +439,9 @@ class LimitAsker {
   }
 
   async execute(answers) {
-    const data = this.parseAnswers(answers)
+    const data = this.packData(answers)
 
-    await db.recordHistory({
+    await db.recordInputHistory({
       timestamp: timestamp(),
       ...answers,
       opts: data.opts

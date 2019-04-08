@@ -104,7 +104,7 @@ class Db {
       .value()
   }
 
-  async recordHistory(obj) {
+  async recordInputHistory(obj) {
     await this.init()
     this.db
       .get('inputHistory')

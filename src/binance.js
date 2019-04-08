@@ -8,12 +8,12 @@ import { bn, toPrecision } from './util'
 import { log } from './logger'
 import keys from '../keys.json'
 
-class AccountSelector {
+class BinanceAccounts {
   constructor() {
     this.accounts = {}
   }
 
-  async account(account) {
+  async get(account) {
     let acc = this.accounts[account]
     if (!acc) {
       acc = new Binance()
@@ -24,7 +24,7 @@ class AccountSelector {
   }
 }
 
-export default new AccountSelector()
+export default new BinanceAccounts()
 
 class Binance {
   constructor() {

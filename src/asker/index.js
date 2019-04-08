@@ -5,8 +5,6 @@ import { Subject } from 'rxjs'
 
 import db from '../db'
 import { log } from '../logger'
-import { fix, bn } from '../util'
-import binance from '../binance'
 import LimitAsker from './limitAsker'
 import monitor from '../services/monitorService'
 import keys from '../../keys.json'
@@ -89,30 +87,6 @@ class Inquire {
     await this.limitAsker.init(account)
   }
 
-  async getPairInfo(pair, side) {
-    const bin = await binance.account(this.account)
-
-    const info = {}
-    info.side = side
-    info.isSell = side === 'SELL'
-    info.ei = await bin.getExchangeInfo(pair)
-    info.balances = {
-      quote: fix(await bin.balance(info.ei.quote), info.ei.precision.quote),
-      base: fix(await bin.balance(info.ei.base), info.ei.precision.quantity)
-    }
-    info.currentPrice = fix(await bin.tickerPrice(pair), info.ei.precision.price)
-
-    // figure-in the base quantity locked in stops
-    const stops = await bin.getOpenStops(pair)
-    if (stops) {
-      info.balances.base = bn(info.balances.base)
-        .plus(stops.totalQuantity)
-        .fix(info.ei.precision.quantity)
-    }
-
-    return info
-  }
-
   async onEachAnswer(o) {
     let [command, question] = o.name.split('_')
 
@@ -135,8 +109,7 @@ class Inquire {
     switch (command) {
       case 'limit':
         if (this.limitAsker.isFirstQuestion(next)) {
-          const info = await this.getPairInfo(o.answer, this.side)
-          this.limitAsker.setPairInfo(info)
+          this.limitAsker.pullPairInfo(o.answer, this.side)
         }
         if (this.limitAsker.isLastQuestion(next)) {
           this.prompts.complete()

@@ -2,7 +2,7 @@ import async from 'awaitable-async'
 import execute from 'controlled-schedule'
 import _ from 'lodash'
 
-import binance from '../binance'
+import binanceAccounts from '../binance'
 import db from '../db'
 import LimitService from './limitService'
 import ui from '../ui'
@@ -13,7 +13,7 @@ class MonitorService {
     this.binance = null
   }
   async start() {
-    this.binance = await binance.account(keys[0].name)
+    this.binance = await binanceAccounts.get(keys[0].name)
     const ok = await this.binance.sync()
     if (!ok) {
       return
