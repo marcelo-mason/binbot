@@ -4,7 +4,7 @@ import moment from 'moment'
 import async from 'awaitable-async'
 import _ from 'lodash'
 
-import { bn, toPrecision } from './util'
+import { bn, toPrecision, fix } from './util'
 import { log } from './logger'
 import keys from '../keys.json'
 
@@ -43,7 +43,7 @@ class Binance {
     this.rest = new BinanceRest({
       key: accountData.key,
       secret: accountData.secret,
-      recvWindow: 10000, // Optional, defaults to 5000, increase if you're getting timestamp errors
+      recvWindow: 5000,
       disableBeautification: false,
       handleDrift: false
     })
@@ -137,14 +137,24 @@ class Binance {
         stops
       }
     } catch (e) {
-      log.error('Could not retreive price', e)
+      log.error('Could not retreive stops', e)
+      return false
+    }
+  }
+
+  async getOpenOrders(pair) {
+    try {
+      const orders = await async.retry(this.retryOpts, this.rest.openOrders.bind(this.rest, pair))
+      return orders
+    } catch (e) {
+      log.error('Could not retreive orders', e)
       return false
     }
   }
 
   async cancelOrders(pair, orderIds) {
     try {
-      await async.eachSeries(orderIds, async orderId => {
+      await async.each(orderIds, async orderId => {
         await async.retry(
           this.retryOpts,
           this.rest.cancelOrder.bind(this.rest, {
@@ -155,7 +165,7 @@ class Binance {
         log.info(`Order ${orderId} on pair ${pair} cancelled`)
       })
     } catch (e) {
-      log.error('Could not retreive price', e)
+      log.error('Could not cancel orders', e)
       return false
     }
   }
@@ -188,7 +198,6 @@ class Binance {
       }
     } catch (e) {
       log.error(e.msg)
-      console.log(ticket)
       return {
         ticket,
         result: e
@@ -324,18 +333,15 @@ class Binance {
   }
 
   async getMatchingPairs(input) {
-    return new Promise(async resolve => {
-      if (!input) {
-        resolve([])
-        return
-      }
-      if (!this.symbols) {
-        await this.exchangeInfo()
-      }
-      const symbolList = this.symbols.map(x => x.symbol)
-      const matches = symbolList.filter(x => x.startsWith(input.toUpperCase()))
-      resolve(matches)
-    })
+    if (!input) {
+      return []
+    }
+    if (!this.symbols) {
+      await this.exchangeInfo()
+    }
+    const symbolList = this.symbols.map(x => x.symbol)
+    const matches = symbolList.filter(x => x.startsWith(input.toUpperCase()))
+    return matches
   }
 
   async getSellablePairs() {
@@ -363,14 +369,42 @@ class Binance {
   }
 
   async getMatchingSellablePairs(input) {
-    return new Promise(async resolve => {
-      if (!input) {
-        resolve([])
-        return
+    if (!input) {
+      return []
+    }
+    const sellable = await this.getSellablePairs()
+    const matches = sellable.filter(x => x.startsWith(input.toUpperCase()))
+    return matches
+  }
+
+  async getPairState(pair, includeStops) {
+    const ei = await this.getExchangeInfo(pair)
+
+    const info = {
+      balances: {}
+    }
+
+    await async.parallel([
+      async () => {
+        info.balances.quote = fix(await this.balance(ei.quote), ei.precision.quote)
+      },
+      async () => {
+        info.balances.base = fix(await this.balance(ei.base), ei.precision.base)
+      },
+      async () => {
+        info.currentPrice = fix(await this.tickerPrice(pair), ei.precision.price)
       }
-      const sellable = await this.getSellablePairs()
-      const matches = sellable.filter(x => x.startsWith(input.toUpperCase()))
-      resolve(matches)
-    })
+    ])
+
+    if (includeStops) {
+      const stops = await this.getOpenStops(pair)
+      if (stops) {
+        info.balances.base = bn(info.balances.base)
+          .plus(stops.totalQuantity)
+          .fix(ei.precision.quantity)
+      }
+    }
+
+    return info
   }
 }

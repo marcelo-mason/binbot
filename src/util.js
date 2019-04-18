@@ -36,3 +36,18 @@ export function colorizeColumns(arr) {
 export function timestamp() {
   return Math.round(new Date().getTime() / 1000)
 }
+
+export function getFormattedQty(data) {
+  if (data.qtyType === 'percent-base') {
+    return `${data.qtyValue}% ${data.base}`
+  }
+  if (data.qtyType === 'percent-quote') {
+    return `${data.qtyValue}% ${data.quote}`
+  }
+  if (data.qtyType === 'base') {
+    return `${data.qtyValue} ${data.base}`
+  }
+  if (data.qtyType === 'quote') {
+    return `${data.qtyValue} ${data.quote}`
+  }
+}

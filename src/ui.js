@@ -4,6 +4,8 @@ import Table from './controls/table'
 import _ from 'lodash'
 import keys from '../keys.json'
 
+import { getFormattedQty } from './util'
+
 class UI {
   constructor() {
     this.tables = []
@@ -79,19 +81,7 @@ class UI {
       data.push(['Action', `${Case.capital(o.data.type)} ${Case.capital(o.data.side)}`])
 
       data.push(['Pair', `${o.data.pair}`])
-
-      if (o.data.qtyType === 'percent-base') {
-        data.push(['Quantity', `${o.data.qtyValue}% ${o.data.base}`])
-      }
-      if (o.data.qtyType === 'percent-quote') {
-        data.push(['Quantity', `${o.data.qtyValue}% ${o.data.quote}`])
-      }
-      if (o.data.qtyType === 'base') {
-        data.push(['Quantity', `${o.data.qtyValue} ${o.data.base}`])
-      }
-      if (o.data.qtyType === 'quote') {
-        data.push(['Quantity', `${o.data.qtyValue} ${o.data.quote}`])
-      }
+      data.push(['Quantity', getFormattedQty(o.data)])
 
       if (o.data.orderCount > 1) {
         data.push(['Min Price', o.data.min])

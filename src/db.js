@@ -147,16 +147,17 @@ class Db {
 
   async getLatestPairs(key) {
     await this.init()
-    const matches = this.db
+    let matches = this.db
       .get('inputHistory')
       .sortBy('timestamp')
       .reverse()
       .uniqBy(key)
       .map(key)
+      .filter(val => !!val)
       .take(4)
       .value()
 
-    if (_.isEmpty(matches)) {
+    if (_.isEmpty(matches) || matches[0] === undefined) {
       return null
     }
     return matches

@@ -25,25 +25,13 @@ class LimitService {
     // get binance data
     this.ei = await this.binance.getExchangeInfo(data.pair)
 
-    const balances = {
-      quote: fix(await this.binance.balance(data.quote), this.ei.precision.quote),
-      base: fix(await this.binance.balance(data.base), this.ei.precision.quantity)
-    }
+    const { balances, currentPrice } = await this.binance.getPairState(
+      data.pair,
+      data.opts.cancelStops
+    )
 
-    let currentPrice = fix(await this.binance.tickerPrice(data.pair), this.ei.precision.price)
     if (!currentPrice) {
       return
-    }
-
-    // figure in the base quantity locked in stops
-
-    if (data.opts.cancelStops) {
-      const stops = await this.binance.getOpenStops(data.pair)
-      if (stops) {
-        balances.base = bn(balances.base)
-          .plus(stops.totalQuantity)
-          .fix(this.ei.precision.quantity)
-      }
     }
 
     // check for iceberg limitation
@@ -499,31 +487,34 @@ class LimitService {
     log.log(asTable(colorizeColumns(display)))
     log.log()
 
-    const orderTable = [
+    const displayTable = [
       [
-        chalk.whiteBright('#'),
+        '#',
         'Price',
+        '',
         'Quantity',
+        '',
         'Cost',
         data.opts.iceberg ? 'Iceberg Size' : '',
         chalk.white(' ')
-      ]
+      ],
+      ...payload.map(o => {
+        return [
+          `${o.num}`,
+          `${o.price} ${data.quote}`,
+          `x`,
+          o.quantity,
+          '=',
+          `${o.cost} ${data.quote}`,
+          data.opts.iceberg ? `(${o.icebergSize} ${data.quote})` : '',
+          o.validation
+        ]
+      })
     ]
-
-    payload.forEach(o => {
-      orderTable.push([
-        o.num,
-        `${o.price} ${data.quote}`,
-        o.quantity,
-        `${o.cost} ${data.quote}`,
-        data.opts.iceberg ? `(${o.icebergSize} ${data.quote})` : '',
-        o.validation
-      ])
-    })
 
     log.log(`ORDERS`)
     log.log()
-    log.log(asTable(orderTable))
+    log.log(asTable(displayTable))
     log.log()
 
     const totalCost = fix(

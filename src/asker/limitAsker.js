@@ -1,5 +1,6 @@
 import chalk from 'chalk'
 import Case from 'case'
+import _ from 'lodash'
 
 import db from '../db'
 import binanceAccounts from '../binance'
@@ -8,8 +9,10 @@ import { bn, timestamp, fix } from '../util'
 
 class LimitAsker {
   constructor() {
+    this.name = 'limit'
     this.info = null
     this.account = null
+    this.binance = null
     this.answers = {}
     this.limitService = new LimitService()
   }
@@ -22,7 +25,7 @@ class LimitAsker {
 
   get questions() {
     return [
-      async prev => {
+      async () => {
         const name = 'limit_0'
         return {
           type: 'autocomplete',
@@ -31,21 +34,27 @@ class LimitAsker {
           message: 'Which a pair are you trading?',
           source: async (answers, input) => {
             this.answers = answers
-            return new Promise(async resolve => {
-              const matching = await this.binance.getMatchingPairs(input)
-              if (!input) {
-                const pairs = await db.getLatestPairs(name)
-                if (pairs) {
-                  resolve(pairs)
-                }
-                resolve(['BTCUSDT', 'ETHUSDT', 'ETHBTC'])
+
+            if (input) {
+              return this.binance.getMatchingPairs(input)
+            }
+            const history = await db.getLatestHistory(answers)
+            const pairs = await db.getLatestPairs(name)
+            if (pairs) {
+              if (history) {
+                _.remove(pairs, p => p === history[name])
+                pairs.unshift(history[name])
               }
-              resolve(matching)
-            })
+              return pairs
+            }
+            if (history) {
+              return [history[name]]
+            }
+            return ['BTCUSDT', 'ETHUSDT', 'ETHBTC']
           }
         }
       },
-      async prev => {
+      async () => {
         const name = 'limit_1'
         return {
           type: 'input-plus',
@@ -53,50 +62,50 @@ class LimitAsker {
           message: 'How many orders to set?',
           default: async answers => {
             this.answers = answers
-            const latest = await db.getLatestHistory(answers)
-            return latest ? latest[name] : 1
+            const history = await db.getLatestHistory(answers)
+            return history ? history[name] : 1
           },
           validate: answer => {
             return !isNaN(answer) && bn(answer).gt(0)
           }
         }
       },
-      async prev => {
+      async () => {
         const name = 'limit_2'
         return {
           type: 'input-plus',
           name,
-          message: `Whats the ${prev > 1 ? 'min' : Case.lower(this.info.side)} price?`,
+          message: `Whats the ${this.answer(1) > 1 ? 'min' : Case.lower(this.info.side)} price?`,
           default: async answers => {
             this.answers = answers
-            const latest = await db.getLatestHistory(answers)
-            return latest ? latest[name] : this.info.currentPrice
+            const history = await db.getLatestHistory(answers)
+            return history ? history[name] : this.info.currentPrice
           },
           validate: answer => {
             return !isNaN(answer) && bn(answer).gt(0)
           }
         }
       },
-      async prev => {
+      async () => {
         const name = 'limit_3'
         return {
           type: 'input-plus',
           name,
           message: `Whats the max price?`,
           when: () => {
-            return this.answers['limit_1'] > 1
+            return this.answer(1) > 1
           },
           default: async answers => {
             this.answers = answers
-            const latest = await db.getLatestHistory(answers)
-            return latest ? latest[name] : answers['limit_2']
+            const history = await db.getLatestHistory(answers)
+            return history ? history[name] : this.answer(2)
           },
           validate: answer => {
-            return !isNaN(answer) && bn(answer).gt(0) && bn(answer).gt(prev)
+            return !isNaN(answer) && bn(answer).gt(0) && bn(answer).gt(this.answer(2))
           }
         }
       },
-      async prev => {
+      async () => {
         const name = 'limit_4'
         return {
           type: 'list',
@@ -104,9 +113,9 @@ class LimitAsker {
           message: 'When to set the order(s)?',
           default: async answers => {
             this.answers = answers
-            const latest = await db.getLatestHistory(answers)
-            if (latest) {
-              return latest[name]
+            const history = await db.getLatestHistory(answers)
+            if (history) {
+              return history[name]
             }
           },
           choices: [
@@ -121,26 +130,26 @@ class LimitAsker {
           ]
         }
       },
-      async prev => {
+      async () => {
         const name = 'limit_5'
         return {
           type: 'input-plus',
           name,
           message: `What price will trigger the order(s)?`,
           when: () => {
-            return this.answers['limit_4'] === 'trigger'
+            return this.answer(4) === 'trigger'
           },
           default: async answers => {
             this.answers = answers
-            const latest = await db.getLatestHistory(answers)
-            return latest ? latest[name] : this.info.currentPrice
+            const history = await db.getLatestHistory(answers)
+            return history ? history[name] : this.info.currentPrice
           },
           validate: answer => {
             return !isNaN(answer)
           }
         }
       },
-      async prev => {
+      async () => {
         const name = 'limit_6'
         return {
           type: 'list',
@@ -148,77 +157,79 @@ class LimitAsker {
           message: `How to supply the amount to ${Case.lower(this.info.side)}?`,
           default: async answers => {
             this.answers = answers
-            const latest = await db.getLatestHistory(answers)
-            if (latest) {
-              return latest[name]
+            const history = await db.getLatestHistory(answers)
+            if (history) {
+              return history[name]
             }
           },
           choices: () => {
             if (this.info.isSell) {
               return [
                 {
-                  name: `Percent of ${this.info.ei.base}`,
+                  name: `Percent of ${this.ei.base}`,
                   value: 'percent-base'
                 },
                 {
-                  name: `Amount of ${this.info.ei.base}`,
+                  name: `Amount of ${this.ei.base}`,
                   value: 'base'
                 },
                 {
-                  name: `Amount of ${this.info.ei.quote}`,
+                  name: `Amount of ${this.ei.quote}`,
                   value: 'quote'
                 }
               ]
             }
             return [
               {
-                name: `Percent of ${this.info.ei.quote}`,
+                name: `Percent of ${this.ei.quote}`,
                 value: 'percent-quote'
               },
               {
-                name: `Amount of ${this.info.ei.quote}`,
+                name: `Amount of ${this.ei.quote}`,
                 value: 'quote'
               },
               {
-                name: `Amount of ${this.info.ei.base}`,
+                name: `Amount of ${this.ei.base}`,
                 value: 'base'
               }
             ]
           }
         }
       },
-      async prev => {
+      async () => {
         const name = 'limit_7'
+        const type = this.answer(6)
+
         if (this.info.isSell) {
-          if (prev === 'percent-base') {
+          if (type === 'percent-base') {
             return {
               type: 'input-plus',
               name,
               message: `What percentage of your ${chalk.yellow(
                 this.info.balances.base
-              )} ${chalk.yellow(this.info.ei.base)} would you like to sell?`,
+              )} ${chalk.yellow(this.ei.base)} would you like to sell?`,
               default: async answers => {
                 this.answers = answers
-                const latest = await db.getLatestHistory(answers)
-                return latest ? latest[name] : 100
+                const history = await db.getLatestHistory(answers)
+                return history ? history[name] : 100
               },
               validate: answer => {
                 return !isNaN(answer) && bn(answer).gt(0)
               }
             }
           }
-          if (prev === 'base') {
+          if (type === 'base') {
             return {
               type: 'input-plus',
               name,
               message: `How many of your ${chalk.yellow(this.info.balances.base)} ${chalk.yellow(
-                this.info.ei.base
+                this.ei.base
               )} would you like to sell?`,
               default: async answers => {
                 this.answers = answers
-                const latest = await db.getLatestHistory(answers)
-                if (latest) {
-                  return latest[name]
+                const history = await db.getLatestHistory(answers)
+                if (history) {
+                  return history[name]
                 }
               },
               validate: answer => {
@@ -226,17 +237,17 @@ class LimitAsker {
               }
             }
           }
-          if (prev === 'quote') {
+          if (type === 'quote') {
             return {
               type: 'input-plus',
               name,
-              message: `How many ${this.info.ei.quote} worth would you like to sell?`,
+              message: `How many ${this.ei.quote} worth would you like to sell?`,
               suggestOnly: true,
               default: async answers => {
                 this.answers = answers
-                const latest = await db.getLatestHistory(answers)
-                if (latest) {
-                  return latest[name]
+                const history = await db.getLatestHistory(answers)
+                if (history) {
+                  return history[name]
                 }
               },
               validate: answer => {
@@ -245,33 +256,33 @@ class LimitAsker {
             }
           }
         } else {
-          if (prev === 'percent-quote') {
+          if (type === 'percent-quote') {
             return {
               type: 'input-plus',
               name,
               message: `What percentage of your ${chalk.yellow(
                 this.info.balances.quote
-              )} ${chalk.yellow(this.info.ei.quote)} would you like to spend?`,
+              )} ${chalk.yellow(this.ei.quote)} would you like to spend?`,
               default: async answers => {
                 this.answers = answers
-                const latest = await db.getLatestHistory(answers)
-                return latest ? latest[name] : 100
+                const history = await db.getLatestHistory(answers)
+                return history ? history[name] : 100
               },
               validate: answer => {
                 return !isNaN(answer) && bn(answer).gt(0)
               }
             }
           }
-          if (prev === 'base') {
+          if (type === 'base') {
             return {
               type: 'input-plus',
               name,
-              message: `How many ${this.info.ei.base} would you like to buy?`,
+              message: `How many ${this.ei.base} would you like to buy?`,
               default: async answers => {
                 this.answers = answers
-                const latest = await db.getLatestHistory(answers)
-                if (latest) {
-                  return latest[name]
+                const history = await db.getLatestHistory(answers)
+                if (history) {
+                  return history[name]
                 }
               },
               validate: answer => {
@@ -279,22 +290,19 @@ class LimitAsker {
               }
             }
           }
-          if (prev === 'quote') {
+          if (type === 'quote') {
             return {
               type: 'autocomplete',
               name,
-              message: `How many ${this.info.ei.quote} would you like to spend?`,
+              message: `How many ${this.ei.quote} would you like to spend?`,
               suggestOnly: true,
-              source: answers => {
+              source: async answers => {
                 this.answers = answers
-                return new Promise(async resolve => {
-                  const latest = await db.getLatestHistory(answers)
-                  if (latest) {
-                    resolve([latest[name] || this.info.balances.quote])
-                    return
-                  }
-                  resolve([this.info.balances.quote])
-                })
+                const history = await db.getLatestHistory(answers)
+                if (history) {
+                  return [history[name] || this.info.balances.quote]
+                }
+                return [this.info.balances.quote]
               },
               validate: answer => {
                 return (
@@ -305,7 +313,7 @@ class LimitAsker {
           }
         }
       },
-      async prev => {
+      async () => {
         const name = 'limit_8'
         return {
           type: 'list',
@@ -326,18 +334,18 @@ class LimitAsker {
             }
           ],
           when: () => {
-            return this.answers['limit_1'] > 1
+            return this.answer(1) > 1
           },
           default: async answers => {
             this.answers = answers
-            const latest = await db.getLatestHistory(answers)
-            if (latest) {
-              return latest[name]
+            const history = await db.getLatestHistory(answers)
+            if (history) {
+              return history[name]
             }
           }
         }
       },
-      async prev => {
+      async () => {
         const name = 'limit_9'
         return {
           type: 'checkbox-plus',
@@ -345,93 +353,84 @@ class LimitAsker {
           message: `Order properties`,
           default: async answers => {
             this.answers = answers
-            const latest = await db.getLatestHistory(answers)
-            if (latest) {
-              return latest[name]
+            const history = await db.getLatestHistory(answers)
+            if (history) {
+              return history[name]
             }
           },
           source: async answers => {
-            return new Promise(async resolve => {
-              resolve([
-                {
-                  name: `Iceberg Order - Hides 90% of the quantity`,
-                  value: 'iceberg'
-                },
-                {
-                  name: `Maker Only - Order rejected if matches as a taker`,
-                  value: 'maker'
-                },
-                {
-                  name: `Cancel Stops - Cancel stops before creating orders`,
-                  value: 'cancelStops'
-                }
-              ])
-            })
+            return [
+              {
+                name: `Iceberg Order - Hides 90% of the quantity`,
+                value: 'iceberg'
+              },
+              {
+                name: `Maker Only - Order rejected if matches as a taker`,
+                value: 'maker'
+              },
+              {
+                name: `Cancel Stops - Cancel stops before creating orders`,
+                value: 'cancelStops'
+              }
+            ]
           }
         }
       }
     ]
   }
 
-  async pullPairInfo(pair, side) {
-    const info = {
-      side,
-      isSell: side === 'SELL',
-      ei: await this.binance.getExchangeInfo(pair)
-    }
-    info.balances = {
-      quote: fix(await this.binance.balance(info.ei.quote), info.ei.precision.quote),
-      base: fix(await this.binance.balance(info.ei.base), info.ei.precision.quantity)
-    }
-    info.currentPrice = fix(await this.binance.tickerPrice(pair), info.ei.precision.price)
+  answer(num) {
+    return this.answers[`limit_${num}`]
+  }
 
-    // figure-in the base quantity locked in stops
-    const stops = await this.binance.getOpenStops(pair)
-    if (stops) {
-      info.balances.base = bn(info.balances.base)
-        .plus(stops.totalQuantity)
-        .fix(info.ei.precision.quantity)
-    }
-    this.info = info
+  async pullInfo(pair, side) {
+    this.ei = await this.binance.getExchangeInfo(pair)
+    this.info = await this.binance.getPairState(pair, true)
+    this.info.side = side
+    this.info.isSell = side === 'SELL'
   }
 
   isFirstQuestion(num) {
     return num === 1
   }
 
-  isLastQuestion(num) {
-    return this.questions.length === num
-  }
-
   async getQuestion(num, answer) {
+    if (num === this.questions.length) {
+      return null
+    }
     let next = await this.questions[num](answer)
     while ('when' in next && !next.when() && num < this.questions.length) {
-      next = await this.questions[++num](answer)
+      num++
+      if (num === this.questions.length) {
+        return null
+      }
+      next = await this.questions[num](answer)
     }
     return next
   }
 
   packData(answers) {
+    this.answers = answers
     return {
       account: this.account,
       type: 'LIMIT',
       side: this.info.side,
       isSell: this.info.isSell,
-      isSpread: parseInt(answers['limit_1']) > 1,
-      isTrigger: answers['limit_4'] === 'trigger',
-      base: this.info.ei.base,
-      quote: this.info.ei.quote,
-      pair: `${this.info.ei.base}${this.info.ei.quote}`,
-      orderCount: parseInt(answers['limit_1']),
-      price: fix(answers['limit_2'], this.info.ei.precision.price),
-      min: answers['limit_3'] ? fix(answers['limit_2'], this.info.ei.precision.price) : undefined,
-      max: fix(answers['limit_3'], this.info.ei.precision.price),
-      trigger: answers['limit_5'] ? fix(answers['limit_5'], this.info.ei.precision.price) : null,
-      qtyType: answers['limit_6'],
-      qtyValue: answers['limit_7'],
-      dist: answers['limit_8'],
-      direction: bn(answers['limit_5']).lt(this.info.currentPrice) ? '<' : '>',
-      opts: answers['limit_9'].reduce((acc, curr) => {
+      isSpread: parseInt(this.answer(1)) > 1,
+      isTrigger: this.answer(4) === 'trigger',
+      base: this.ei.base,
+      quote: this.ei.quote,
+      pair: `${this.ei.base}${this.ei.quote}`,
+      orderCount: parseInt(this.answer(1)),
+      price: fix(this.answer(2), this.ei.precision.price),
+      min: this.answer(3) ? fix(this.answer(2), this.ei.precision.price) : undefined,
+      max: fix(this.answer(3), this.ei.precision.price),
+      trigger: this.answer(5) ? fix(this.answer(5), this.ei.precision.price) : null,
+      qtyType: this.answer(6),
+      qtyValue: this.answer(7),
+      dist: this.answer(8),
+      direction: bn(this.answer(5)).lt(this.info.currentPrice) ? '<' : '>',
+      opts: this.answer(9).reduce((acc, curr) => {
         acc[curr] = true
         return acc
       }, {})

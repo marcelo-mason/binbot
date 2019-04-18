@@ -6,10 +6,10 @@ import { Subject } from 'rxjs'
 import db from '../db'
 import { log } from '../logger'
 import LimitAsker from './limitAsker'
-import monitor from '../services/monitorService'
+import CancelAsker from './cancelAsker'
 import keys from '../../keys.json'
 
-class Inquire {
+class Asker {
   constructor() {
     this.side = null
     this.limitAsker = null
@@ -43,8 +43,8 @@ class Inquire {
             value: 'limit_SELL'
           },
           {
-            name: 'Monitor',
-            value: 'monitor'
+            name: 'Cancel Orders',
+            value: 'cancel'
           }
         ],
         default: async answers => {
@@ -70,6 +70,14 @@ class Inquire {
     log.log()
   }
 
+  async initAskers(account) {
+    this.account = account
+    this.limitAsker = new LimitAsker()
+    this.cancelAsker = new CancelAsker()
+    await this.limitAsker.init(account)
+    await this.cancelAsker.init(account)
+  }
+
   async start() {
     this.init()
 
@@ -81,45 +89,49 @@ class Inquire {
     }
   }
 
-  async initAskers(account) {
-    this.account = account
-    this.limitAsker = new LimitAsker()
-    await this.limitAsker.init(account)
-  }
-
   async onEachAnswer(o) {
     let [command, question] = o.name.split('_')
 
-    // handle account choice
-    if (command === 'account') {
-      await this.initAskers(o.answer)
-      this.prompts.next(this.questions.action)
-      return
-    }
+    let next = parseInt(question) + 1
 
     // handle action choice
     if (command === 'action') {
       ;[command, this.side] = o.answer.split('_')
-      question = -1
+      next = 0
     }
-
-    const next = parseInt(question) + 1
 
     // ask next question
     switch (command) {
-      case 'limit':
-        if (this.limitAsker.isFirstQuestion(next)) {
-          this.limitAsker.pullPairInfo(o.answer, this.side)
-        }
-        if (this.limitAsker.isLastQuestion(next)) {
-          this.prompts.complete()
-          return
-        }
-        this.prompts.next(await this.limitAsker.getQuestion(next, o.answer))
+      case 'account':
+        await this.initAskers(o.answer)
+        this.prompts.next(this.questions.action)
         break
-      case 'monitor': {
-        await monitor.start()
-      }
+      case 'limit':
+        {
+          if (this.limitAsker.isFirstQuestion(next)) {
+            await this.limitAsker.pullInfo(o.answer, this.side)
+          }
+          const q = await this.limitAsker.getQuestion(next, o.answer)
+          if (q) {
+            this.prompts.next(q)
+          } else {
+            this.prompts.complete()
+          }
+        }
+        break
+      case 'cancel':
+        {
+          if (this.cancelAsker.isFirstQuestion(next)) {
+            await this.cancelAsker.pullInfo(o.answer)
+          }
+          const q = await this.cancelAsker.getQuestion(next, o.answer)
+          if (q) {
+            this.prompts.next(q)
+          } else {
+            this.prompts.complete()
+          }
+        }
+        break
     }
   }
 
@@ -129,8 +141,11 @@ class Inquire {
       case 'limit':
         await this.limitAsker.execute(answers)
         break
+      case 'cancel':
+        await this.cancelAsker.execute(answers)
+        break
     }
   }
 }
 
-export default new Inquire()
+export default new Asker()
