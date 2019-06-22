@@ -7,6 +7,7 @@ import db from '../db'
 import { log } from '../logger'
 import LimitAsker from './limitAsker'
 import CancelAsker from './cancelAsker'
+import LiquidateAsker from './liquidateAsker'
 import keys from '../../keys.json'
 
 class Asker {
@@ -55,38 +56,42 @@ class Asker {
         }
       }
     }
-  }
 
-  async init() {
     inquirer.registerPrompt('input-plus', require('../controls/input'))
     inquirer.registerPrompt('autocomplete', require('../controls/autocomplete'))
     inquirer.registerPrompt('checkbox-plus', require('inquirer-checkbox-plus-prompt'))
-    const prompt = inquirer.prompt(this.prompts)
-    prompt.ui.process.subscribe(this.onEachAnswer.bind(this), log.error)
-    prompt.then(this.onFinish.bind(this))
-
-    const text = '(Use arrow keys and <enter> to select, <tab> to fill)'
-    log.log(chalk.yellow(text))
-    log.log()
   }
 
   async initAskers(account) {
     this.account = account
     this.limitAsker = new LimitAsker()
     this.cancelAsker = new CancelAsker()
+    this.liquidateAsker = new LiquidateAsker()
     await this.limitAsker.init(account)
+    await this.liquidateAsker.init(account)
     await this.cancelAsker.init(account)
   }
 
   async start() {
-    this.init()
+    return new Promise(async resolve => {
+      const prompt = inquirer.prompt(this.prompts)
+      prompt.ui.process.subscribe(this.onEachAnswer.bind(this), log.error)
+      prompt.then(async answers => {
+        await this.onFinish(answers)
+        resolve()
+      })
 
-    if (keys.length > 1) {
-      this.prompts.next(this.questions.account)
-    } else {
-      this.initAskers(keys[0].name)
-      this.prompts.next(this.questions.action)
-    }
+      const text = '(Use arrow keys and <enter> to select, <tab> to fill)'
+      log.log(chalk.yellow(text))
+      log.log()
+
+      if (keys.length > 1) {
+        this.prompts.next(this.questions.account)
+      } else {
+        this.initAskers(keys[0].name)
+        this.prompts.next(this.questions.action)
+      }
+    })
   }
 
   async onEachAnswer(o) {
@@ -120,6 +125,19 @@ class Asker {
         }
         break
       case 'cancel':
+        {
+          if (this.cancelAsker.isFirstQuestion(next)) {
+            await this.cancelAsker.pullInfo(o.answer)
+          }
+          const q = await this.cancelAsker.getQuestion(next, o.answer)
+          if (q) {
+            this.prompts.next(q)
+          } else {
+            this.prompts.complete()
+          }
+        }
+        break
+      case 'liquidate':
         {
           if (this.cancelAsker.isFirstQuestion(next)) {
             await this.cancelAsker.pullInfo(o.answer)

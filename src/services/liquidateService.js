@@ -6,7 +6,7 @@ import db from '../db'
 import binanceAccounts from '../binance'
 import { log } from '../logger'
 
-class CancelService {
+class LiquidateService {
   constructor() {
     this.binance = null
   }
@@ -50,4 +50,4 @@ class CancelService {
   }
 }
 
-export default CancelService
+export default LiquidateService

@@ -28,6 +28,7 @@
     "cli-cursor": "^2.1.0",
     "commander": "^2.19.0",
     "controlled-schedule": "^1.2.0",
+    "delay": "^4.2.0",
     "dotenv": "^6.2.0",
     "figures": "^2.0.0",
     "forever-monitor": "^1.7.1",
