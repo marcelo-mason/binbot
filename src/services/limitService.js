@@ -67,26 +67,14 @@ class LimitService {
       return
     }
 
-    if (data.isTrigger) {
-      let res = await prompts({
-        type: 'confirm',
-        name: 'correct',
-        message: 'Create triggers?'
-      })
+    let res = await prompts({
+      type: 'confirm',
+      name: 'correct',
+      message: 'Create orders?'
+    })
 
-      if (res.correct) {
-        this.store(payload, data)
-      }
-    } else {
-      let res = await prompts({
-        type: 'confirm',
-        name: 'correct',
-        message: 'Create orders?'
-      })
-
-      if (res.correct) {
-        this.create(payload, data)
-      }
+    if (res.correct) {
+      this.create(payload, data)    
     }
   }
 
@@ -379,36 +367,7 @@ class LimitService {
       if (error) {
         o.validation = `${chalk.bold.red('✖')} ${chalk.bold.red(error)}`
         hasError = true
-      }
-
-      if (data.isTrigger) {
-        // test order with binance
-        const { ticket, success, msg } = await this.binance.testOrder(
-          data.pair,
-          data.side,
-          idable(6, false),
-          o.quantity,
-          o.icebergQty,
-          o.price,
-          data.opts
-        )
-
-        await db.recordTestHistory({
-          timestamp: timestamp(),
-          ticket,
-          result: {
-            success,
-            msg
-          }
-        })
-
-        if (success) {
-          o.validation = `${chalk.bold.green('✔')}`
-        } else {
-          o.validation = `${chalk.bold.red('✖')} ${chalk.bold.red(msg)}`
-          hasError = true
-        }
-      }
+      }      
     })
     return !hasError
   }
@@ -468,20 +427,7 @@ class LimitService {
 
       display.push([`${Case.capital(data.side)} price`, `${data.price} ${data.quote}`])
       display.push([`${Case.capital(data.side)} distance`, `${distance}% from current`])
-    }
-
-    if (data.isTrigger) {
-      const triggerDistance = bn(currentPrice)
-        .minus(data.trigger)
-        .absoluteValue()
-        .dividedBy(currentPrice)
-        .multipliedBy(100)
-        .toFixed(2)
-        .toString()
-
-      display.push([`Trigger price`, `${data.trigger} ${data.quote}`])
-      display.push([`Trigger distance`, `${triggerDistance}% from current`])
-    }
+    }    
 
     log.log()
     log.log(asTable(colorizeColumns(display)))
@@ -561,13 +507,6 @@ class LimitService {
     log.log()
     log.log(asTable(colorizeColumns(totals)))
     log.log()
-  }
-
-  async store(payload, data) {
-    payload.forEach(o => {
-      o.validation = undefined
-    })
-    await db.addTriggerOrder(payload, data)
   }
 
   async create(payload, data) {

@@ -4,7 +4,7 @@ import _ from 'lodash'
 import db from '../db'
 import binanceAccounts from '../binance'
 import CancelService from '../services/cancelService'
-import { bn, timestamp, fix, getFormattedQty } from '../util'
+import { bn, timestamp, fix } from '../util'
 
 class CancelAsker {
   constructor() {
@@ -57,37 +57,9 @@ class CancelAsker {
       async () => {
         const name = 'cancel_1'
         return {
-          type: 'list',
-          name,
-          message: 'Which type of orders do you want to cancel?',
-          default: async answers => {
-            this.answers = answers
-            const history = await db.getLatestHistory(answers)
-            if (history) {
-              return history[name]
-            }
-          },
-          choices: [
-            {
-              name: `Open Orders`,
-              value: 'open'
-            },
-            {
-              name: `Trigger Orders`,
-              value: 'trigger'
-            }
-          ]
-        }
-      },
-      async () => {
-        const name = 'cancel_2'
-        return {
           type: 'checkbox-plus',
           name,
           message: `Which orders do you want to cancel?`,
-          when: () => {
-            return this.answer(1) === 'open'
-          },
           source: async answers => {
             this.answers = answers
             const orders = await this.binance.getOpenOrders(this.answer(0))
@@ -132,62 +104,6 @@ class CancelAsker {
             ]
           }
         }
-      },
-      async () => {
-        const name = 'cancel_3'
-        return {
-          type: 'checkbox-plus',
-          name,
-          message: `Which orders do you want to cancel?`,
-          when: () => {
-            return this.answer(1) === 'trigger'
-          },
-          source: async answers => {
-            this.answers = answers
-
-            const orders = await db.getTriggerOrders(this.answer(0))
-            if (!orders.length) {
-              return [
-                {
-                  name: `No trigger orders for pair`,
-                  value: '-',
-                  disabled: true
-                }
-              ]
-            }
-
-            const table = asTable(
-              orders.map(o => {
-                const price = o.data.isSpread
-                  ? `${o.data.min} - ${o.data.max}`
-                  : `${o.data.price} ${o.data.quote}`
-
-                return [
-                  `${o.data.trigger} ${this.ei.base}`,
-                  '->',
-                  `${price}`,
-                  'x',
-                  `${getFormattedQty(o.data)}`
-                ]
-              })
-            )
-
-            const lines = table.split('\n')
-
-            return [
-              {
-                name: 'All',
-                value: orders.map(o => o.id)
-              },
-              ...lines.map((line, i) => {
-                return {
-                  name: line,
-                  value: orders[i].id
-                }
-              })
-            ]
-          }
-        }
       }
     ]
   }
@@ -226,19 +142,14 @@ class CancelAsker {
     return {
       type: 'CANCEL',
       pair: this.answer(0),
-      isTrigger: this.answer(1) === 'trigger',
-      orderIds: this.answer(2),
-      triggerIds: this.answer(3)
+      orderIds: this.answer(1)
     }
   }
 
   async execute(answers) {
     const data = this.packData(answers)
 
-    if (data.isTrigger && !data.triggerIds.length) {
-      return
-    }
-    if (!data.isTrigger && !data.orderIds.length) {
+    if (!data.orderIds.length) {
       return
     }
 

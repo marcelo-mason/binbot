@@ -110,50 +110,6 @@ class LimitAsker {
         return {
           type: 'list',
           name,
-          message: 'When to set the order(s)?',
-          default: async answers => {
-            this.answers = answers
-            const history = await db.getLatestHistory(answers)
-            if (history) {
-              return history[name]
-            }
-          },
-          choices: [
-            {
-              name: `Now`,
-              value: 'now'
-            },
-            {
-              name: `Trigger`,
-              value: 'trigger'
-            }
-          ]
-        }
-      },
-      async () => {
-        const name = 'limit_5'
-        return {
-          type: 'input-plus',
-          name,
-          message: `What price will trigger the order(s)?`,
-          when: () => {
-            return this.answer(4) === 'trigger'
-          },
-          default: async answers => {
-            this.answers = answers
-            const history = await db.getLatestHistory(answers)
-            return history ? history[name] : this.info.currentPrice
-          },
-          validate: answer => {
-            return !isNaN(answer)
-          }
-        }
-      },
-      async () => {
-        const name = 'limit_6'
-        return {
-          type: 'list',
-          name,
           message: `How to supply the amount to ${Case.lower(this.info.side)}?`,
           default: async answers => {
             this.answers = answers
@@ -197,8 +153,8 @@ class LimitAsker {
         }
       },
       async () => {
-        const name = 'limit_7'
-        const type = this.answer(6)
+        const name = 'limit_5'
+        const type = this.answer(4)
 
         if (this.info.isSell) {
           if (type === 'percent-base') {
@@ -314,7 +270,7 @@ class LimitAsker {
         }
       },
       async () => {
-        const name = 'limit_8'
+        const name = 'limit_6'
         return {
           type: 'list',
           name,
@@ -346,7 +302,7 @@ class LimitAsker {
         }
       },
       async () => {
-        const name = 'limit_9'
+        const name = 'limit_7'
         return {
           type: 'checkbox-plus',
           name,
@@ -417,7 +373,6 @@ class LimitAsker {
       side: this.info.side,
       isSell: this.info.isSell,
       isSpread: parseInt(this.answer(1)) > 1,
-      isTrigger: this.answer(4) === 'trigger',
       base: this.ei.base,
       quote: this.ei.quote,
       pair: `${this.ei.base}${this.ei.quote}`,
@@ -425,12 +380,10 @@ class LimitAsker {
       price: fix(this.answer(2), this.ei.precision.price),
       min: this.answer(3) ? fix(this.answer(2), this.ei.precision.price) : undefined,
       max: fix(this.answer(3), this.ei.precision.price),
-      trigger: this.answer(5) ? fix(this.answer(5), this.ei.precision.price) : null,
-      qtyType: this.answer(6),
-      qtyValue: this.answer(7),
-      dist: this.answer(8),
-      direction: bn(this.answer(5)).lt(this.info.currentPrice) ? '<' : '>',
-      opts: this.answer(9).reduce((acc, curr) => {
+      qtyType: this.answer(4),
+      qtyValue: this.answer(5),
+      dist: this.answer(6),
+      opts: this.answer(7).reduce((acc, curr) => {
         acc[curr] = true
         return acc
       }, {})
