@@ -88,7 +88,7 @@ class Asker {
       if (keys.length > 1) {
         this.prompts.next(this.questions.account)
       } else {
-        this.initAskers(keys[0].name)
+        await this.initAskers(keys[0].name)
         this.prompts.next(this.questions.action)
       }
     })
