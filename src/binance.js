@@ -170,13 +170,6 @@ class Binance {
     }
   }
 
-  async cancelStops(pair) {
-    const stops = await this.getOpenStops(pair)
-    if (stops) {
-      await this.cancelOrders(pair, stops.orderIds)
-    }
-  }
-
   async createOrder(pair, side, id, quantity, icebergQty, price, opts) {
     const ticket = {
       newClientOrderId: id,
@@ -377,7 +370,7 @@ class Binance {
     return matches
   }
 
-  async getPairState(pair, includeStops) {
+  async getPairState(pair) {
     const ei = await this.getExchangeInfo(pair)
 
     const info = {
@@ -395,15 +388,6 @@ class Binance {
         info.currentPrice = fix(await this.tickerPrice(pair), ei.precision.price)
       }
     ])
-
-    if (includeStops) {
-      const stops = await this.getOpenStops(pair)
-      if (stops) {
-        info.balances.base = bn(info.balances.base)
-          .plus(stops.totalQuantity)
-          .fix(ei.precision.quantity)
-      }
-    }
 
     return info
   }

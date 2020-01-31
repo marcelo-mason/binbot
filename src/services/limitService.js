@@ -25,10 +25,7 @@ class LimitService {
     // get binance data
     this.ei = await this.binance.getExchangeInfo(data.pair)
 
-    const { balances, currentPrice } = await this.binance.getPairState(
-      data.pair,
-      data.opts.cancelStops
-    )
+    const { balances, currentPrice } = await this.binance.getPairState(data.pair)
 
     if (!currentPrice) {
       return
@@ -510,10 +507,6 @@ class LimitService {
   }
 
   async create(payload, data) {
-    if (data.opts.cancelStops) {
-      await this.binance.cancelStops(data.pair)
-    }
-
     await async.eachSeries(payload, async o => {
       // create order
       const { ticket, result } = await this.binance.createOrder(

@@ -323,10 +323,6 @@ class LimitAsker {
               {
                 name: `Maker Only - Order rejected if matches as a taker`,
                 value: 'maker'
-              },
-              {
-                name: `Cancel Stops - Cancel stops before creating orders`,
-                value: 'cancelStops'
               }
             ]
           }
@@ -341,7 +337,7 @@ class LimitAsker {
 
   async pullInfo(pair, side) {
     this.ei = await this.binance.getExchangeInfo(pair)
-    this.info = await this.binance.getPairState(pair, true)
+    this.info = await this.binance.getPairState(pair)
     this.info.side = side
     this.info.isSell = side === 'SELL'
   }

@@ -114,7 +114,7 @@ class CancelAsker {
 
   async pullInfo(pair, side) {
     this.ei = await this.binance.getExchangeInfo(pair)
-    this.info = await this.binance.getPairState(pair, true)
+    this.info = await this.binance.getPairState(pair)
     this.info.side = side
   }
 
