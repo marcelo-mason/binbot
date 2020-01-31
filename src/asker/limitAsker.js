@@ -78,9 +78,10 @@ class LimitAsker {
           message: `Whats the ${this.answer(1) > 1 ? 'min' : Case.lower(this.info.side)} price?`,
           default: async answers => {
             this.answers = answers
-            const history = await db.getLatestHistory(answers)
-            return history ? history[name] : this.info.currentPrice
+            //const history = await db.getLatestHistory(answers)
+            return /*history ? history[name] :*/ this.info.currentPrice
           },
+          preset: this.info.currentPrice,
           validate: answer => {
             return !isNaN(answer) && bn(answer).gt(0)
           }
@@ -248,17 +249,16 @@ class LimitAsker {
           }
           if (type === 'quote') {
             return {
-              type: 'autocomplete',
+              type: 'input-plus',
               name,
               message: `How many ${this.ei.quote} would you like to spend?`,
-              suggestOnly: true,
-              source: async answers => {
+              default: async answers => {
                 this.answers = answers
                 const history = await db.getLatestHistory(answers)
                 if (history) {
-                  return [history[name] || this.info.balances.quote]
+                  return history[name] || this.info.balances.quote
                 }
-                return [this.info.balances.quote]
+                return this.info.balances.quote
               },
               validate: answer => {
                 return (
