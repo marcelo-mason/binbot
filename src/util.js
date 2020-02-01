@@ -10,12 +10,12 @@ BigNumber.prototype.fix = function(precision) {
 }
 
 export function toPrecision(num) {
-  const s = num.replace(/([0-9]+(\.[0-9]+[1-9])?)(\.?0+$)/, '$1').split('.')
+  const [integer, fraction] = num.split('.')
 
-  if (s.length > 1) {
-    return s[1].length
+  if (integer == 1){
+    return 0
   }
-  return 0
+  return fraction.indexOf('1') + 1  
 }
 
 export function fix(num, precision) {

@@ -290,7 +290,10 @@ class LimitService {
     return payload
   }
 
-  // when calculating quantities based on a quote amount e.g. POLY quantity based off of BTC, an average base price is used (max+min)/2. once the order distribution is generated the final tally of the quote costs may differ from what was requested. this code adds or removes a certain amount of base quantity from the middle order to correct for this difference.
+  // when calculating quantities based on a quote amount e.g. POLY quantity based off of BTC, 
+  // an average base price is used (max+min)/2. once the order distribution is generated the 
+  // final tally of the quote costs may differ from what was requested. this code adds or removes 
+  // a certain amount of base quantity from the middle order to correct for this difference.
   errorCorrectQuantities(payload, quoteToSpend, quantity) {
     const line = payload[parseInt(payload.length / 2) - 1]
     const linePrice = line.price
