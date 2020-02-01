@@ -111,7 +111,7 @@ class LimitAsker {
         return {
           type: 'list',
           name,
-          message: `How to supply the amount to ${Case.lower(this.info.side)}?`,
+          message: `How to quantify the amount to ${Case.lower(this.info.side)}?`,
           default: async answers => {
             this.answers = answers
             const history = await db.getLatestHistory(answers)
