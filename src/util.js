@@ -15,7 +15,7 @@ export function toPrecision(num) {
   if (integer == 1){
     return 0
   }
-  return fraction.indexOf('1') + 1  
+  return fraction.indexOf('1') + 1
 }
 
 export function fix(num, precision) {

@@ -170,7 +170,7 @@ class LimitService {
                 .fix(this.ei.precision.price)
             : undefined,
           icebergQty: data.opts.iceberg
-            ? bn(this.ei.iceberg.qty(quantity)).fix(this.ei.precision.price)
+            ? bn(this.ei.iceberg.qty(quantity)).fix(this.ei.precision.quantity)
             : undefined
         }
       ]
