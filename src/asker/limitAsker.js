@@ -35,9 +35,14 @@ class LimitAsker {
           source: async (answers, input) => {
             this.answers = answers
 
+            if (this.answers.action === 'limit_SELL') {
+              return this.binance.getMatchingSellablePairs(input)
+            }
+
             if (input) {
               return this.binance.getMatchingPairs(input)
             }
+            
             const history = await db.getLatestHistory(answers)
             const pairs = await db.getLatestPairs(name)
             if (pairs) {

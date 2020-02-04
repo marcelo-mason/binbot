@@ -341,15 +341,16 @@ class Binance {
     if (!this.balances) {
       await this.pullBalances()
     }
-    const sellable = this.balances.reduce(async (acc, curr) => {
+    const sellable = this.balances.sort((a, b) => b.free - a.free).reduce(async (acc, curr) => {
       if (!this.symbols) {
         await this.exchangeInfo()
       }
       const matching = this.symbols
-        .map(x => x.symbol)
         .filter(x => {
-          return x.startsWith(curr.asset)
+          return x.baseAsset === curr.asset && (x.quoteAsset === 'BTC' || x.quoteAsset === 'USDT')
         })
+        .map(x => x.symbol)
+
       const out = await acc
       matching.forEach(x => {
         if (!out.includes(x)) {
@@ -362,11 +363,11 @@ class Binance {
   }
 
   async getMatchingSellablePairs(input) {
-    if (!input) {
-      return []
-    }
     const sellable = await this.getSellablePairs()
-    const matches = sellable.filter(x => x.startsWith(input.toUpperCase()))
+    if (!input) {
+      return sellable
+    }
+    const matches = sellable.filter(x => x.startsWith(input.toUpperCase()))    
     return matches
   }
 
